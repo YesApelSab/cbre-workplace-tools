@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Space Analysis Processor – CBRE OM (Portfolio v3)</title>
+<title>Space Analysis Processor – CBRE OM (v8)</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono&family=DM+Sans:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600&display=swap" rel="stylesheet">
@@ -152,7 +152,7 @@ body{min-height:100vh;color:var(--dg);font-family:'DM Sans',sans-serif;backgroun
 <div class="bldg-list" id="bList" style="display:none"></div>
 <div class="err" id="eM"></div>
 <div class="ct" id="res"><div class="print-hdr" id="printHdr"></div></div>
-<div class="ft"><div style="display:flex;align-items:center;gap:8px"><div style="width:24px;height:2px;background:var(--ag)"></div><span>CBRE OCCUPANCY MANAGEMENT</span></div><span>v2.3 Multi-Select</span></div>
+<div class="ft"><div style="display:flex;align-items:center;gap:8px"><div style="width:24px;height:2px;background:var(--ag)"></div><span>CBRE OCCUPANCY MANAGEMENT</span></div><span>v8</span></div>
 </div>
 <script>
 // ─── BENCHMARKS ───
@@ -790,172 +790,434 @@ function updHC() {
 }
 
 // ─── EXCEL EXPORT ───
+// ─── EXCEL EXPORT ───
 function doExcel() {
-  var t = aggregateSelected();
   var cn = document.getElementById("cI").value || "Selection";
 
-  // Gather all source data from selected buildings/floors
-  var sourceData = [["Space Category", "Floor", "Area", "Space Type", "Area Rounded", "Seats", "Suggested"]];
-
-  for (var i = 0; i < SELECTED_ITEMS.length; i++) {
-    var item = SELECTED_ITEMS[i];
-    if (item.type === "portfolio") {
-      // Add all buildings
-      for (var b = 0; b < BUILDINGS.length; b++) {
-        var raw = BUILDINGS[b].raw || [];
-        for (var r = 0; r < raw.length; r++) {
-          var d = raw[r];
-          sourceData.push([d.grouping, d.floor, d.area, d.name, d.rounded, d.seat, d.suggested]);
-        }
-      }
-    } else if (item.type === "building") {
-      var raw = BUILDINGS[item.idx].raw || [];
-      for (var r = 0; r < raw.length; r++) {
-        var d = raw[r];
-        sourceData.push([d.grouping, d.floor, d.area, d.name, d.rounded, d.seat, d.suggested]);
-      }
-    } else if (item.type === "floor") {
-      var bldg = BUILDINGS[item.idx];
-      var raw = bldg.raw || [];
-      for (var r = 0; r < raw.length; r++) {
-        var d = raw[r];
-        if (d.floor === item.floor) {
-          sourceData.push([d.grouping, d.floor, d.area, d.name, d.rounded, d.seat, d.suggested]);
-        }
-      }
+  // ─── Gather source rows & floors ───
+  var sourceRows = [], floors = [];
+  function addRaw(raw) {
+    for (var r = 0; r < raw.length; r++) {
+      sourceRows.push(raw[r]);
+      if (raw[r].floor && floors.indexOf(raw[r].floor) < 0) floors.push(raw[r].floor);
     }
   }
+  for (var i = 0; i < SELECTED_ITEMS.length; i++) {
+    var item = SELECTED_ITEMS[i];
+    if (item.type === "portfolio") { for (var b = 0; b < BUILDINGS.length; b++) addRaw(BUILDINGS[b].raw || []); break; }
+    else if (item.type === "building") addRaw(BUILDINGS[item.idx].raw || []);
+    else if (item.type === "floor") addRaw((BUILDINGS[item.idx].raw || []).filter(function(d){ return d.floor === item.floor; }));
+  }
+  floors.sort();
+  var nF = floors.length;
 
-  // Create workbook
+  function colLetter(idx) {
+    var n = idx, s = "";
+    do { s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26) - 1; } while (n >= 0);
+    return s;
+  }
+  var fCols = [];
+  for (var fi = 0; fi < nF; fi++) fCols.push(colLetter(1 + fi));
+  var totCol = colLetter(1 + nF);
+  var numFmt = "#,##0", pctFmt = "0.00%";
   var wb = XLSX.utils.book_new();
 
-  // Define styles
-  var headerStyle = {fill: {fgColor: {rgb: "003F2D"}}, font: {bold: true, color: {rgb: "FFFFFF"}}, alignment: {horizontal: "center"}};
-  var altRowStyle = {fill: {fgColor: {rgb: "F5F7F7"}}};
-  var numStyle = {numFmt: "#,##0"};
-  var pctStyle = {numFmt: "0.0%"};
-  var labelStyle = {font: {bold: false}};
-  var sectionStyle = {fill: {fgColor: {rgb: "CAD1D3"}}, font: {bold: true}};
+  // ─── JS computation helpers ───
+  function jSum(floor, grouping, name) {
+    var s = 0;
+    for (var r = 0; r < sourceRows.length; r++) {
+      var d = sourceRows[r];
+      if (floor && d.floor !== floor) continue;
+      if (grouping && d.grouping !== grouping) continue;
+      if (name && d.name !== name) continue;
+      s += d.rounded;
+    }
+    return s;
+  }
+  function jCount(floor, grouping, name) {
+    var n = 0;
+    for (var r = 0; r < sourceRows.length; r++) {
+      var d = sourceRows[r];
+      if (floor && d.floor !== floor) continue;
+      if (grouping && d.grouping !== grouping) continue;
+      if (name && d.name !== name) continue;
+      n++;
+    }
+    return n;
+  }
+  function jSumSeats(floor, grouping) {
+    var s = 0;
+    for (var r = 0; r < sourceRows.length; r++) {
+      var d = sourceRows[r];
+      if (floor && d.floor !== floor) continue;
+      if (grouping && d.grouping !== grouping) continue;
+      s += d.seat;
+    }
+    return s;
+  }
 
-  // Summary sheet - matches the format from reference file
-  var summaryData = [
-    ["Metric", cn, "Total"],
-    ["GIA", t.gia, t.gia],
-    ["Core", t.core, t.core],
-    ["USF", t.usf, t.usf],
-    ["SPACE CATEGORY SF"],
-    ["Me (Individual) SF", t.meSF, t.meSF],
-    ["We (Collaboration) SF", t.weSF, t.weSF],
-    ["Support SF", t.supSF, t.supSF],
-    ["Amenity SF", t.amSF, t.amSF],
-    ["Total Measured SF", t.measured, t.measured],
-    ["Circulation", t.circ, t.circ],
-    ["COMPOSITION (% w/ Circulation Distributed)"],
-    ["Me %", t.mePct, t.mePct],
-    ["We %", t.wePct, t.wePct],
-    ["Support %", t.supPct, t.supPct],
-    ["Amenity %", t.amenPct, t.amenPct],
-    ["KEY METRICS"],
-    ["Workpoints", t.allocatable, t.allocatable],
-    ["Total Me Count", t.totalMeCount, t.totalMeCount],
-    ["Offices", t.offices, t.offices],
-    ["Workstations", t.workstations, t.workstations],
-    ["USF/Seat", t.allocatable > 0 ? Math.round(t.usf/t.allocatable) : 0, t.allocatable > 0 ? Math.round(t.usf/t.allocatable) : 0],
-    ["Avg Office SF", t.avgOfficeSF, t.avgOfficeSF],
-    ["Avg WS SF", t.avgWsSF, t.avgWsSF],
-    ["We:Me", t.weMeRatio.toFixed(2) + ":1", t.weMeRatio.toFixed(2) + ":1"],
-    ["Enclosed Meeting Rooms", t.enclosedCount, t.enclosedCount],
-    ["Small (2-6)", t.small, t.small],
-    ["Medium (7-10)", t.medium, t.medium],
-    ["Large (11-19)", t.large, t.large],
-    ["XL (20+)", t.xl, t.xl],
-    ["Open Collaboration Spaces", t.openCount, t.openCount],
-    ["Total We Seats", t.weSeats, t.weSeats],
-    ["Focus Rooms", t.focus, t.focus],
-    ["Phone Rooms", t.phone, t.phone]
-  ];
+  // ─── Cell writer ───
+  var hdrS = {fill:{fgColor:{rgb:"003F2D"}},font:{bold:true,color:{rgb:"FFFFFF"}}};
+  var boldS = {font:{bold:true}};
+  var grayS = {fill:{fgColor:{rgb:"D9D9D9"}},font:{bold:true}};
 
-  // Create Source sheet first (formulas reference it)
-  var ws_source = XLSX.utils.aoa_to_sheet(sourceData);
-  XLSX.utils.book_append_sheet(wb, ws_source, "Source");
+  function wr(ws, addr, val, style, fmt) {
+    var c;
+    if (val && typeof val === "object" && val.f !== undefined) {
+      c = {f: val.f, t: val.t || "n", v: val.v !== undefined ? val.v : 0};
+    } else if (typeof val === "number") {
+      c = {v: val, t: "n"};
+    } else {
+      c = {v: String(val !== undefined && val !== null ? val : ""), t: "s"};
+    }
+    if (style) c.s = style;
+    if (fmt) c.z = fmt;
+    ws[addr] = c;
+  }
+  function F(f, v) { return {f: f, t: "n", v: v}; }
 
-  // Summary sheet with formulas
-  var ws_summary = XLSX.utils.aoa_to_sheet(summaryData);
+  // ─── SOURCE SHEET ───
+  var ws_src = XLSX.utils.aoa_to_sheet([
+    ["Space Category","Floor","Area","Space Type","Area Rounded","Seats","Suggested # of seats"]
+  ]);
+  for (var r = 0; r < sourceRows.length; r++) {
+    var d = sourceRows[r], exRow = r + 2;
+    XLSX.utils.sheet_add_aoa(ws_src, [[d.grouping, d.floor, d.area, d.name]], {origin: "A" + exRow});
+    ws_src["E" + exRow] = {f: "IFERROR(MROUND(C" + exRow + ",5),0)", t: "n", v: d.rounded};
+    ws_src["F" + exRow] = {v: d.seat, t: "n"};
+    ws_src["G" + exRow] = {f: "IF(A" + exRow + "=\"Collaboration Space\",ROUND((E" + exRow + "/30),0),\"N/A\")", t: "s", v: String(d.suggested)};
+  }
+  ws_src["!ref"] = "A1:G" + (sourceRows.length + 1);
+  ["A1","B1","C1","D1","E1","F1","G1"].forEach(function(c){ if(ws_src[c]) ws_src[c].s = hdrS; });
+  ws_src["!cols"] = [{wch:22},{wch:14},{wch:14},{wch:30},{wch:14},{wch:8},{wch:20}];
+  XLSX.utils.book_append_sheet(wb, ws_src, "Source");
 
-  // Apply header formatting
-  ws_summary['A1'].s = headerStyle;
-  ws_summary['B1'].s = headerStyle;
-  ws_summary['C1'].s = headerStyle;
+  // ─── SUMMARY SHEET ─── (matching Mizuho reference structure)
+  var ws_sum = {};
 
-  // Apply number formatting to numeric cells
-  ['B2','C2','B3','C3','B4','C4','B7','C7','B8','C8','B9','C9','B10','C10','B11','C11','B12','C12'].forEach(function(cell) {
-    if (ws_summary[cell]) ws_summary[cell].z = "#,##0";
-  });
+  // Row 1: headers
+  wr(ws_sum,"A1","Metric",hdrS);
+  for (var fi = 0; fi < nF; fi++) wr(ws_sum,fCols[fi]+"1",floors[fi],hdrS);
+  wr(ws_sum,totCol+"1","Total",hdrS);
 
-  // Apply percentage formatting
-  ['B15','C15','B16','C16','B17','C17','B18','C18'].forEach(function(cell) {
-    if (ws_summary[cell]) ws_summary[cell].z = "0.0%";
-  });
+  // Helpers for summary
+  function sumRow(row, label, grouping, lStyle) {
+    wr(ws_sum,"A"+row,label,lStyle||null);
+    var tot=0;
+    for (var fi=0;fi<nF;fi++){
+      var fl=floors[fi], v=jSum(fl,grouping,null);
+      wr(ws_sum,fCols[fi]+row,F("SUMIFS(Source!E:E,Source!A:A,\""+grouping+"\",Source!B:B,\""+fl+"\")",v),null,numFmt);
+      tot+=v;
+    }
+    wr(ws_sum,totCol+row,F("SUM("+fCols[0]+row+":"+fCols[nF-1]+row+")",tot),null,numFmt);
+  }
+  function sfRow(row, label, formula_template, v_fn, lStyle) {
+    wr(ws_sum,"A"+row,label,lStyle||null);
+    var tot=0;
+    for (var fi=0;fi<nF;fi++){
+      var v=v_fn(floors[fi]);
+      wr(ws_sum,fCols[fi]+row,F(formula_template(fCols[fi]),v),null,numFmt);
+      tot+=v;
+    }
+    wr(ws_sum,totCol+row,F("SUM("+fCols[0]+row+":"+fCols[nF-1]+row+")",tot),null,numFmt);
+  }
 
-  XLSX.utils.book_append_sheet(wb, ws_summary, "Summary");
+  // R2: GIA
+  sumRow(2,"GIA","Area Measurement",boldS);
+  // R3: Core
+  sumRow(3,"Core","Core Space");
+  // R4: USF
+  wr(ws_sum,"A4","USF",boldS);
+  var tot4=0;
+  for(var fi=0;fi<nF;fi++){var v=jSum(floors[fi],"Area Measurement",null)-jSum(floors[fi],"Core Space",null);wr(ws_sum,fCols[fi]+"4",F(fCols[fi]+"2-"+fCols[fi]+"3",v),null,numFmt);tot4+=v;}
+  wr(ws_sum,totCol+"4",F("SUM("+fCols[0]+"4:"+fCols[nF-1]+"4)",tot4),null,numFmt);
 
-  // Individual Space sheet - breakdown by office/WS size
-  var indivData = [["Individual Space", cn, "Total"]];
+  // R6: Space category header
+  wr(ws_sum,"A6","SPACE CATEGORY SF",hdrS);
 
-  // Get detailed breakdown if available from selected buildings
-  indivData.push(["Private Office"]);
-  indivData.push(["Private Office Count", t.offices, t.offices]);
-  indivData.push(["Private Office SF", t.officeSF, t.officeSF]);
-  indivData.push(["Workstation"]);
-  indivData.push(["Workstation Count", t.workstations, t.workstations]);
-  indivData.push(["Workstation SF", t.wsSF, t.wsSF]);
-  indivData.push(["Focus Room", t.focus, t.focus]);
-  indivData.push(["Phone Room", t.phone, t.phone]);
+  // R7-R10: category SFs
+  sumRow(7,"Me (Individual) SF","Individual Space");
+  sumRow(8,"We (Collaboration) SF","Collaboration Space");
+  sumRow(9,"Support SF","Support Space");
+  sumRow(10,"Amenity SF","Amenity Space");
 
-  var ws_indiv = XLSX.utils.aoa_to_sheet(indivData);
-  XLSX.utils.book_append_sheet(wb, ws_indiv, "Individual Space");
+  // R11: Total Measured
+  wr(ws_sum,"A11","Total Measured SF",grayS);
+  var tot11=0;
+  for(var fi=0;fi<nF;fi++){
+    var v=jSum(floors[fi],"Individual Space",null)+jSum(floors[fi],"Collaboration Space",null)+jSum(floors[fi],"Support Space",null)+jSum(floors[fi],"Amenity Space",null);
+    wr(ws_sum,fCols[fi]+"11",F(fCols[fi]+"7+"+fCols[fi]+"8+"+fCols[fi]+"9+"+fCols[fi]+"10",v),null,numFmt);
+    tot11+=v;
+  }
+  wr(ws_sum,totCol+"11",F("SUM("+fCols[0]+"11:"+fCols[nF-1]+"11)",tot11),null,numFmt);
 
-  // Collaboration Space sheet
-  var collabData = [
-    ["Collaboration Space", cn, "Total"],
-    ["Enclosed"],
-    ["Small (2-6)", t.small, t.small],
-    ["Medium (7-10)", t.medium, t.medium],
-    ["Large (11-19)", t.large, t.large],
-    ["XL (20+)", t.xl, t.xl],
-    ["Total Enclosed", t.enclosedCount, t.enclosedCount],
-    ["Total Enclosed Seats", t.small*4 + t.medium*8.5 + t.large*15 + t.xl*25, t.small*4 + t.medium*8.5 + t.large*15 + t.xl*25],
-    ["Open Collaboration"],
-    ["Open Count", t.openCount, t.openCount],
-    ["Total We Seats", t.weSeats, t.weSeats],
-    ["Total Collaboration SF", t.weSF, t.weSF]
-  ];
+  // R12: Circulation
+  wr(ws_sum,"A12","Circulation");
+  var tot12=0;
+  for(var fi=0;fi<nF;fi++){
+    var usf=jSum(floors[fi],"Area Measurement",null)-jSum(floors[fi],"Core Space",null);
+    var meas=jSum(floors[fi],"Individual Space",null)+jSum(floors[fi],"Collaboration Space",null)+jSum(floors[fi],"Support Space",null)+jSum(floors[fi],"Amenity Space",null);
+    var v=usf-meas;
+    wr(ws_sum,fCols[fi]+"12",F(fCols[fi]+"4-"+fCols[fi]+"11",v),null,numFmt);
+    tot12+=v;
+  }
+  wr(ws_sum,totCol+"12",F("SUM("+fCols[0]+"12:"+fCols[nF-1]+"12)",tot12),null,numFmt);
 
-  var ws_collab = XLSX.utils.aoa_to_sheet(collabData);
-  XLSX.utils.book_append_sheet(wb, ws_collab, "Collaboration Space");
+  // R14: Composition header
+  wr(ws_sum,"A14","COMPOSITION (% w/ Circulation Distributed)",hdrS);
 
-  // Support Space sheet
-  var suppData = [
-    ["Support Space", cn, "Total"],
-    ["Support SF", t.supSF, t.supSF]
-  ];
+  // R15-R18: composition %
+  var pctCats = ["Individual Space","Collaboration Space","Support Space","Amenity Space"];
+  var pctRows = [15,16,17,18];
+  var pctLabels = ["Me %","We %","Support %","Amenity %"];
+  var catRows = [7,8,9,10];
+  for (var ci=0;ci<4;ci++) {
+    var row=pctRows[ci];
+    wr(ws_sum,"A"+row,pctLabels[ci]);
+    var totPct=0, totMeas=jSum(null,"Individual Space",null)+jSum(null,"Collaboration Space",null)+jSum(null,"Support Space",null)+jSum(null,"Amenity Space",null);
+    var totUSF=jSum(null,"Area Measurement",null)-jSum(null,"Core Space",null);
+    var totCat=jSum(null,pctCats[ci],null);
+    for(var fi=0;fi<nF;fi++){
+      var meSF=jSum(floors[fi],"Individual Space",null),weSF=jSum(floors[fi],"Collaboration Space",null),supSF=jSum(floors[fi],"Support Space",null),ameSF=jSum(floors[fi],"Amenity Space",null);
+      var meas=meSF+weSF+supSF+ameSF;
+      var usf=jSum(floors[fi],"Area Measurement",null)-jSum(floors[fi],"Core Space",null);
+      var catSF=jSum(floors[fi],pctCats[ci],null);
+      var v=usf>0&&meas>0?(catSF/meas)*(meas+(usf-meas))/usf:0;
+      var cr=catRows[ci];
+      var f="IFERROR(("+fCols[fi]+cr+"/"+fCols[fi]+"11)*("+fCols[fi]+"11+"+fCols[fi]+"12)/"+fCols[fi]+"4,0)";
+      wr(ws_sum,fCols[fi]+row,F(f,v),null,pctFmt);
+    }
+    var vtot=totUSF>0&&totMeas>0?(totCat/totMeas)*(totMeas+(totUSF-totMeas))/totUSF:0;
+    var cr2=catRows[ci];
+    wr(ws_sum,totCol+row,F("IFERROR(("+totCol+cr2+"/"+totCol+"11)*("+totCol+"11+"+totCol+"12)/"+totCol+"4,0)",vtot),null,pctFmt);
+  }
 
-  var ws_supp = XLSX.utils.aoa_to_sheet(suppData);
-  XLSX.utils.book_append_sheet(wb, ws_supp, "Support Space");
+  // R20: Key Metrics header
+  wr(ws_sum,"A20","KEY METRICS",hdrS);
 
-  // Amenity Space sheet
-  var amenData = [
-    ["Amenity Space", cn, "Total"],
-    ["Amenity SF", t.amSF, t.amSF]
-  ];
+  // R21: Workpoints (Offices + Workstations)
+  wr(ws_sum,"A21","Workpoints");
+  var tot21=0;
+  for(var fi=0;fi<nF;fi++){
+    var fl=floors[fi];
+    var v=jCount(fl,"Individual Space","Private Office")+jCount(fl,"Individual Space","Shared Office")+jCount(fl,"Individual Space","Workstation");
+    var f="COUNTIFS(Source!A:A,\"Individual Space\",Source!B:B,\""+fl+"\",Source!D:D,\"Workstation\")+COUNTIFS(Source!A:A,\"Individual Space\",Source!B:B,\""+fl+"\",Source!D:D,\"Private Office\")+COUNTIFS(Source!A:A,\"Individual Space\",Source!B:B,\""+fl+"\",Source!D:D,\"Shared Office\")";
+    wr(ws_sum,fCols[fi]+"21",F(f,v),null,numFmt);
+    tot21+=v;
+  }
+  wr(ws_sum,totCol+"21",F("SUM("+fCols[0]+"21:"+fCols[nF-1]+"21)",tot21),null,numFmt);
 
-  var ws_amen = XLSX.utils.aoa_to_sheet(amenData);
-  XLSX.utils.book_append_sheet(wb, ws_amen, "Amenity Space");
+  // R22: Total Me Count
+  wr(ws_sum,"A22","Total Me Count");
+  var tot22=0;
+  for(var fi=0;fi<nF;fi++){
+    var fl=floors[fi],v=jCount(fl,"Individual Space",null);
+    wr(ws_sum,fCols[fi]+"22",F("COUNTIFS(Source!A:A,\"Individual Space\",Source!B:B,\""+fl+"\")",v),null,numFmt);
+    tot22+=v;
+  }
+  wr(ws_sum,totCol+"22",F("SUM("+fCols[0]+"22:"+fCols[nF-1]+"22)",tot22),null,numFmt);
 
-  // Generate filename and export
+  // R23: Offices
+  wr(ws_sum,"A23","Offices");
+  var tot23=0;
+  for(var fi=0;fi<nF;fi++){
+    var fl=floors[fi],v=jCount(fl,"Individual Space","Private Office")+jCount(fl,"Individual Space","Shared Office");
+    var f="COUNTIFS(Source!A:A,\"Individual Space\",Source!B:B,\""+fl+"\",Source!D:D,\"Private Office\")+COUNTIFS(Source!A:A,\"Individual Space\",Source!B:B,\""+fl+"\",Source!D:D,\"Shared Office\")";
+    wr(ws_sum,fCols[fi]+"23",F(f,v),null,numFmt);
+    tot23+=v;
+  }
+  wr(ws_sum,totCol+"23",F("SUM("+fCols[0]+"23:"+fCols[nF-1]+"23)",tot23),null,numFmt);
+
+  // R24: Workstations
+  wr(ws_sum,"A24","Workstations");
+  var tot24=0;
+  for(var fi=0;fi<nF;fi++){
+    var fl=floors[fi],v=jCount(fl,"Individual Space","Workstation");
+    wr(ws_sum,fCols[fi]+"24",F("COUNTIFS(Source!A:A,\"Individual Space\",Source!B:B,\""+fl+"\",Source!D:D,\"Workstation\")",v),null,numFmt);
+    tot24+=v;
+  }
+  wr(ws_sum,totCol+"24",F("SUM("+fCols[0]+"24:"+fCols[nF-1]+"24)",tot24),null,numFmt);
+
+  // R25: USF/Seat
+  wr(ws_sum,"A25","USF/Seat");
+  var tot25=0;
+  for(var fi=0;fi<nF;fi++){
+    var wp=(wr(ws_sum,"_tmp",0),jCount(floors[fi],"Individual Space","Private Office")+jCount(floors[fi],"Individual Space","Shared Office")+jCount(floors[fi],"Individual Space","Workstation"));
+    var usf=jSum(floors[fi],"Area Measurement",null)-jSum(floors[fi],"Core Space",null);
+    var v=wp>0?Math.round(usf/wp):0;
+    wr(ws_sum,fCols[fi]+"25",F("IFERROR(ROUND("+fCols[fi]+"4/"+fCols[fi]+"21,0),0)",v),null,numFmt);
+    tot25+=v;
+  }
+  delete ws_sum["_tmp"];
+  wr(ws_sum,totCol+"25",F("SUM("+fCols[0]+"25:"+fCols[nF-1]+"25)",tot25),null,numFmt);
+
+  // R26: Avg Office SF
+  wr(ws_sum,"A26","Avg Office SF");
+  var tot26=0;
+  for(var fi=0;fi<nF;fi++){
+    var fl=floors[fi];
+    var offN=jCount(fl,"Individual Space","Private Office")+jCount(fl,"Individual Space","Shared Office");
+    var offSF=jSum(fl,"Individual Space","Private Office")+jSum(fl,"Individual Space","Shared Office");
+    var v=offN>0?Math.round(offSF/offN):0;
+    wr(ws_sum,fCols[fi]+"26",F("IFERROR(ROUND((SUMIFS(Source!E:E,Source!A:A,\"Individual Space\",Source!B:B,\""+fl+"\",Source!D:D,\"Private Office\")+SUMIFS(Source!E:E,Source!A:A,\"Individual Space\",Source!B:B,\""+fl+"\",Source!D:D,\"Shared Office\"))/"+fCols[fi]+"23,0),0)",v),null,numFmt);
+    tot26+=v;
+  }
+  wr(ws_sum,totCol+"26",F("SUM("+fCols[0]+"26:"+fCols[nF-1]+"26)",tot26),null,numFmt);
+
+  // R27: Avg WS SF
+  wr(ws_sum,"A27","Avg WS SF");
+  var tot27=0;
+  for(var fi=0;fi<nF;fi++){
+    var fl=floors[fi],wsN=jCount(fl,"Individual Space","Workstation"),wsSF=jSum(fl,"Individual Space","Workstation");
+    var v=wsN>0?Math.round(wsSF/wsN):0;
+    wr(ws_sum,fCols[fi]+"27",F("IFERROR(ROUND(SUMIFS(Source!E:E,Source!A:A,\"Individual Space\",Source!B:B,\""+fl+"\",Source!D:D,\"Workstation\")/"+fCols[fi]+"24,0),0)",v),null,numFmt);
+    tot27+=v;
+  }
+  wr(ws_sum,totCol+"27",F("SUM("+fCols[0]+"27:"+fCols[nF-1]+"27)",tot27),null,numFmt);
+
+  // R28: We:Me ratio (text)
+  wr(ws_sum,"A28","We:Me");
+  for(var fi=0;fi<nF;fi++){
+    var wp=jCount(floors[fi],"Individual Space","Private Office")+jCount(floors[fi],"Individual Space","Shared Office")+jCount(floors[fi],"Individual Space","Workstation");
+    var weSeats=jSumSeats(floors[fi],"Collaboration Space");
+    wr(ws_sum,fCols[fi]+"28",wp>0?(weSeats/wp).toFixed(2)+":1":"N/A");
+  }
+  var totWP=jCount(null,"Individual Space","Private Office")+jCount(null,"Individual Space","Shared Office")+jCount(null,"Individual Space","Workstation");
+  var totWeSeats=jSumSeats(null,"Collaboration Space");
+  wr(ws_sum,totCol+"28",totWP>0?(totWeSeats/totWP).toFixed(2)+":1":"N/A");
+
+  ws_sum["!ref"] = "A1:" + totCol + "29";
+  ws_sum["!cols"] = [{wch:45}];
+  XLSX.utils.book_append_sheet(wb, ws_sum, "Summary");
+
+  // ─── BREAKDOWN SHEETS (size-bucket pivot, all static values) ───
+  // pivot[grouping][name][rounded][floor] = count
+  var pivot = {};
+  var byT = {}; // [grouping][name][floor] = {count, sf}
+  var cats = ["Individual Space","Collaboration Space","Support Space","Amenity Space"];
+  cats.forEach(function(cat){ pivot[cat]={}; byT[cat]={}; });
+
+  for(var r=0;r<sourceRows.length;r++){
+    var d=sourceRows[r];
+    if(!pivot[d.grouping]||d.rounded===0) continue;
+    if(!pivot[d.grouping][d.name]){ pivot[d.grouping][d.name]={}; byT[d.grouping][d.name]={}; }
+    if(!pivot[d.grouping][d.name][d.rounded]) pivot[d.grouping][d.name][d.rounded]={};
+    pivot[d.grouping][d.name][d.rounded][d.floor]=(pivot[d.grouping][d.name][d.rounded][d.floor]||0)+1;
+    if(!byT[d.grouping][d.name][d.floor]) byT[d.grouping][d.name][d.floor]={count:0,sf:0};
+    byT[d.grouping][d.name][d.floor].count++;
+    byT[d.grouping][d.name][d.floor].sf+=d.rounded;
+  }
+
+  function buildBreakdownWS(cat) {
+    var types=Object.keys(pivot[cat]).sort();
+    var ws={};
+    var curRow=1;
+    var countRows=[], sfRows=[]; // track subtotal row numbers for formula refs
+
+    // Header
+    ws["A"+curRow]={v:cat,t:"s",s:hdrS};
+    for(var fi=0;fi<nF;fi++) ws[fCols[fi]+curRow]={v:floors[fi],t:"s",s:hdrS};
+    ws[totCol+curRow]={v:"Total",t:"s",s:hdrS};
+    curRow++;
+
+    types.forEach(function(typeName){
+      // Type section header
+      ws["A"+curRow]={v:typeName,t:"s",s:boldS};
+      curRow++;
+
+      // Size bucket rows
+      var sizes=Object.keys(pivot[cat][typeName]).map(Number).sort(function(a,b){return a-b;});
+      sizes.forEach(function(sz){
+        ws["A"+curRow]={v:sz,t:"n"};
+        var tot=0;
+        for(var fi=0;fi<nF;fi++){
+          var v=pivot[cat][typeName][sz][floors[fi]]||0;
+          ws[fCols[fi]+curRow]={v:v,t:"n"};
+          tot+=v;
+        }
+        ws[totCol+curRow]={v:tot,t:"n"};
+        curRow++;
+      });
+
+      // Count subtotal — record row for formula reference
+      countRows.push(curRow);
+      ws["A"+curRow]={v:typeName+" Count",t:"s",s:grayS};
+      var totC=0;
+      for(var fi=0;fi<nF;fi++){
+        var bf=(byT[cat][typeName][floors[fi]])||{count:0,sf:0};
+        ws[fCols[fi]+curRow]={v:bf.count,t:"n",s:grayS};
+        totC+=bf.count;
+      }
+      ws[totCol+curRow]={v:totC,t:"n",s:grayS};
+      curRow++;
+
+      // SF subtotal — record row for formula reference
+      sfRows.push(curRow);
+      ws["A"+curRow]={v:typeName+" SF",t:"s",s:grayS};
+      var totSF=0;
+      for(var fi=0;fi<nF;fi++){
+        var bf=(byT[cat][typeName][floors[fi]])||{count:0,sf:0};
+        ws[fCols[fi]+curRow]={v:bf.sf,t:"n",s:grayS};
+        totSF+=bf.sf;
+      }
+      ws[totCol+curRow]={v:totSF,t:"n",s:grayS};
+      curRow++;
+
+      // Blank separator
+      curRow++;
+    });
+
+    // Combined total rows (Collaboration Space only)
+    if (cat === "Collaboration Space") {
+      var totBlkS = {fill:{fgColor:{rgb:"003F2D"}},font:{bold:true,color:{rgb:"FFFFFF"}}};
+
+      // Build formula like SUM(B3,B7,B11) from tracked row numbers
+      function sumFormula(col, rows) {
+        return "SUM(" + rows.map(function(r){ return col+r; }).join(",") + ")";
+      }
+
+      // Total Count row
+      ws["A"+curRow]={v:"Total Count",t:"s",s:totBlkS};
+      var grandC=0;
+      for(var fi=0;fi<nF;fi++){
+        var fc=0;
+        types.forEach(function(tn){ var bf=(byT[cat][tn][floors[fi]])||{count:0,sf:0}; fc+=bf.count; });
+        ws[fCols[fi]+curRow]={f:sumFormula(fCols[fi],countRows),t:"n",v:fc,s:totBlkS};
+        grandC+=fc;
+      }
+      ws[totCol+curRow]={f:sumFormula(totCol,countRows),t:"n",v:grandC,s:totBlkS};
+      curRow++;
+
+      // Total SF row
+      ws["A"+curRow]={v:"Total SF",t:"s",s:totBlkS};
+      var grandSF=0;
+      for(var fi=0;fi<nF;fi++){
+        var fSF=0;
+        types.forEach(function(tn){ var bf=(byT[cat][tn][floors[fi]])||{count:0,sf:0}; fSF+=bf.sf; });
+        ws[fCols[fi]+curRow]={f:sumFormula(fCols[fi],sfRows),t:"n",v:fSF,s:totBlkS};
+        grandSF+=fSF;
+      }
+      ws[totCol+curRow]={f:sumFormula(totCol,sfRows),t:"n",v:grandSF,s:totBlkS};
+      curRow++;
+    }
+
+    ws["!ref"]="A1:"+totCol+(curRow-1);
+    ws["!cols"]=[{wch:40}];
+    return ws;
+  }
+
+  XLSX.utils.book_append_sheet(wb, buildBreakdownWS("Individual Space"), "Individual Space");
+  XLSX.utils.book_append_sheet(wb, buildBreakdownWS("Collaboration Space"), "Collaboration Space");
+  XLSX.utils.book_append_sheet(wb, buildBreakdownWS("Support Space"), "Support Space");
+  XLSX.utils.book_append_sheet(wb, buildBreakdownWS("Amenity Space"), "Amenity Space");
+
+  // ─── Export ───
   var filename = cn.replace(/[^a-zA-Z0-9 ]/g,"_") + "_Space_Analysis.xlsx";
   XLSX.writeFile(wb, filename);
 }
+
+
+
 
 function doPNG() {
   var cn = document.getElementById("cI").value || "Selection";
