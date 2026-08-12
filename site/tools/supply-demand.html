@@ -361,63 +361,6 @@ select.text-input option{background:#001A14;color:#F2F4F3;}
 </head>
 <body>
 
-<!-- PASSWORD GATE MODAL -->
-<div id="pw-gate" style="
-  position:fixed;inset:0;z-index:9999;
-  display:flex;align-items:center;justify-content:center;
-  background:rgba(0,14,9,.92);
-  backdrop-filter:blur(8px);
-  font-family:'DM Sans',Arial,sans-serif;
-">
-  <div style="
-    background:#012A2D;
-    border:1px solid rgba(23,232,143,.25);
-    border-radius:16px;
-    padding:2.5rem 2.75rem;
-    width:100%;max-width:380px;
-    text-align:center;
-    box-shadow:0 24px 64px rgba(0,0,0,.55);
-  ">
-    <div style="font-size:1.85rem;margin-bottom:.35rem">🔒</div>
-    <div style="font-size:1.1rem;font-weight:700;color:#F2F4F3;margin-bottom:.2rem">Supply &amp; Demand Tool</div>
-    <div style="font-size:.78rem;color:rgba(242,244,243,.45);margin-bottom:1.5rem">CBRE Workplace Advisory · Restricted Access</div>
-    <input id="pw-input" type="password" placeholder="Enter access code"
-      style="
-        width:100%;box-sizing:border-box;
-        padding:.7rem 1rem;
-        background:rgba(242,244,243,.06);
-        border:1px solid rgba(242,244,243,.15);
-        border-radius:8px;
-        color:#F2F4F3;
-        font-size:.92rem;
-        font-family:inherit;
-        outline:none;
-        margin-bottom:.65rem;
-        text-align:center;
-        letter-spacing:.08em;
-      "
-      onkeydown="if(event.key==='Enter')checkPW()"
-    />
-    <div id="pw-error" style="
-      font-size:.72rem;color:#ff6b6b;
-      min-height:1rem;margin-bottom:.6rem;
-      display:none;
-    ">Incorrect access code. Try again.</div>
-    <button onclick="checkPW()" style="
-      width:100%;padding:.7rem;
-      background:var(--accent,#17E88F);
-      color:#003F2D;
-      border:none;border-radius:8px;
-      font-size:.9rem;font-weight:700;
-      cursor:pointer;
-      font-family:inherit;
-    ">Unlock</button>
-    <div style="font-size:.65rem;color:rgba(242,244,243,.22);margin-top:1.1rem">
-      Contact your CBRE advisor for the access code.
-    </div>
-  </div>
-</div>
-
 <!-- SCENARIO PICKER OVERLAY -->
 <div id="mode-picker" class="mode-picker-overlay">
   <div class="mode-picker-inner">
@@ -782,33 +725,6 @@ var expansionOptions = [];
 var _xoid = 0;
 var XO_COLORS = ['rgba(128,187,173,.85)', 'rgba(83,129,132,.9)', 'rgba(160,196,200,.85)'];
 var SC_COLORS = { base: '#538184', mid: '#80BBAD', high: '#17E88F' };
-// ─── PASSWORD GATE ───────────────────────────────────────────────────────────
-(function(){
-  var gate = document.getElementById('pw-gate');
-  if (!gate) return;
-  if (sessionStorage.getItem('sd-auth') === '1') { gate.style.display = 'none'; return; }
-  // block scroll on main page until unlocked
-  document.body.style.overflow = 'hidden';
-  setTimeout(function(){ var inp = document.getElementById('pw-input'); if(inp) inp.focus(); }, 80);
-})();
-
-function checkPW() {
-  var inp = document.getElementById('pw-input');
-  var err = document.getElementById('pw-error');
-  if (!inp) return;
-  if (inp.value === 'CONSULTING2026YS') {
-    sessionStorage.setItem('sd-auth', '1');
-    var gate = document.getElementById('pw-gate');
-    if (gate) gate.style.display = 'none';
-    document.body.style.overflow = '';
-  } else {
-    if (err) { err.style.display = 'block'; }
-    inp.value = '';
-    inp.focus();
-    inp.style.borderColor = 'rgba(255,107,107,.5)';
-    setTimeout(function(){ if(inp) inp.style.borderColor = 'rgba(242,244,243,.15)'; }, 1200);
-  }
-}
 
 // High = brightest (risk case), Base = most muted — intentional hierarchy
 var CHART_COLORS = { base: '#75B8BD', mid: '#9DD5CC', high: '#17E88F' };
