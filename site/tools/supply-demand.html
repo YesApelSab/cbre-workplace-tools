@@ -16,7 +16,7 @@
   --text:#F2F4F3;--text-muted:rgba(242,244,243,0.55);
   --card-bg:rgba(255,255,255,0.04);--card-border:rgba(255,255,255,0.08);
   --radius:12px;
-  --sc-base:#17E88F;--sc-mid:#80BBAD;--sc-high:#538184;
+  --sc-base:#538184;--sc-mid:#80BBAD;--sc-high:#17E88F;
   --input-bg:rgba(255,255,255,0.06);--input-border:rgba(255,255,255,0.12);
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -504,6 +504,10 @@ select.text-input option{background:#001A14;color:#F2F4F3;}
               <label class="input-label">Base Year</label>
               <input type="number" class="num-input" id="baseYear" min="2020" max="2040" placeholder="2025" oninput="state.baseYear=parseInt(this.value)||2025;updateHCPreview();recompute()"/>
             </div>
+            <div class="input-group-sm">
+              <label class="input-label">Horizon (yrs)</label>
+              <input type="number" class="num-input" id="planningHorizon" min="1" max="20" placeholder="5" oninput="state.planningHorizon=parseInt(this.value)||5;updateHCPreview();recompute()"/>
+            </div>
           </div>
 
           <div class="input-group">
@@ -516,17 +520,25 @@ select.text-input option{background:#001A14;color:#F2F4F3;}
           </div>
 
           <div class="input-group" id="att-rate-section">
-            <label class="input-label">Attendance Rate</label>
+            <label class="input-label">Peak Attendance Rate <span title="The % of total headcount in the office on your busiest day. This drives seat demand. Not the same as average utilization — that measures how full seats are across all days." style="cursor:help;opacity:.6;font-size:.75rem">?</span></label>
             <div class="input-with-unit">
               <input type="number" class="num-input-sm" id="attendanceRate" min="1" max="100" value="65" oninput="state.attendanceRate=parseInt(this.value)||65;syncAttPreset();recompute()"/>
-              <span class="unit">% of HC in office on peak day</span>
+              <span class="unit">% of HC on peak day</span>
             </div>
             <div class="att-presets" id="att-presets">
               <button class="att-preset" onclick="setAttendance(10)" data-val="10">Fully Remote</button>
               <button class="att-preset" onclick="setAttendance(50)" data-val="50">Hybrid 2–3×/wk</button>
               <button class="att-preset" onclick="setAttendance(85)" data-val="85">Mainly In-Office 4–5×/wk</button>
             </div>
-            <div class="input-hint">Peak day = highest concurrent headcount expected in office</div>
+            <div class="input-hint">Peak day = busiest day. <em>Attendance rate ≠ utilization rate</em> — utilization measures seat-hours occupied; attendance measures people present at a moment in time.</div>
+          </div>
+          <div class="input-group">
+            <label class="input-label">Avg. Attendance Rate <span title="Optional. The typical daily attendance across all days — usually 50–70% of peak. Used to show average demand alongside peak demand in the dashboard." style="cursor:help;opacity:.6;font-size:.75rem">?</span> <span style="font-weight:400;opacity:.4;text-transform:none;letter-spacing:0">— optional</span></label>
+            <div class="input-with-unit">
+              <input type="number" class="num-input-sm" id="avgAttendanceRate" min="0" max="100" placeholder="—" oninput="state.avgAttendanceRate=parseInt(this.value)||0;recompute()"/>
+              <span class="unit">% of HC on avg day</span>
+            </div>
+            <div class="input-hint">Typically 50–70% of peak. Leave blank to show peak only.</div>
           </div>
 
           <div class="input-group">
@@ -539,7 +551,7 @@ select.text-input option{background:#001A14;color:#F2F4F3;}
               </div>
               <div class="scenario-row">
                 <div class="scenario-dot" style="background:var(--sc-base)"></div>
-                <span class="scenario-label">Base</span>
+                <span class="scenario-label" title="Base (conservative): your floor-case assumption. If reality beats Base, you're in good shape.">Base</span>
                 <div style="flex:1"></div>
                 <div class="input-with-unit">
                   <input type="number" class="num-input-sm" id="rateBase" min="-20" max="100" step="0.5" value="3" oninput="state.scenarios.base.rate=parseFloat(this.value)||0;updateHCPreview();recompute()"/>
@@ -548,7 +560,7 @@ select.text-input option{background:#001A14;color:#F2F4F3;}
               </div>
               <div class="scenario-row">
                 <div class="scenario-dot" style="background:var(--sc-mid)"></div>
-                <span class="scenario-label">Mid</span>
+                <span class="scenario-label" title="Mid (expected): your most likely growth trajectory. Use this for lease sizing decisions.">Mid</span>
                 <div style="flex:1"></div>
                 <div class="input-with-unit">
                   <input type="number" class="num-input-sm" id="rateMid" min="-20" max="100" step="0.5" value="5" oninput="state.scenarios.mid.rate=parseFloat(this.value)||0;updateHCPreview();recompute()"/>
@@ -557,7 +569,7 @@ select.text-input option{background:#001A14;color:#F2F4F3;}
               </div>
               <div class="scenario-row">
                 <div class="scenario-dot" style="background:var(--sc-high)"></div>
-                <span class="scenario-label">High</span>
+                <span class="scenario-label" title="High (risk case): stress-test scenario. If High growth materialises and you're unprepared, this is your biggest exposure.">High</span>
                 <div style="flex:1"></div>
                 <div class="input-with-unit">
                   <input type="number" class="num-input-sm" id="rateHigh" min="-20" max="100" step="0.5" value="8" oninput="state.scenarios.high.rate=parseFloat(this.value)||0;updateHCPreview();recompute()"/>
@@ -653,7 +665,9 @@ var state = {
   sector: '',
   currentHC: 0,
   baseYear: new Date().getFullYear(),
+  planningHorizon: 5,
   attendanceRate: 65,
+  avgAttendanceRate: 0,
   scenarios: {
     base: { rate: 3 },
     mid:  { rate: 5 },
@@ -677,9 +691,9 @@ var _bid = 0, _fid = 0, _eid = 0;
 var expansionOptions = [];
 var _xoid = 0;
 var XO_COLORS = ['rgba(128,187,173,.85)', 'rgba(83,129,132,.9)', 'rgba(160,196,200,.85)'];
-var SC_COLORS = { base: '#17E88F', mid: '#80BBAD', high: '#538184' };
-// Brighter variants for SVG chart lines — same CBRE teal family, optimised for dark bg
-var CHART_COLORS = { base: '#17E88F', mid: '#9DD5CC', high: '#75B8BD' };
+var SC_COLORS = { base: '#538184', mid: '#80BBAD', high: '#17E88F' };
+// High = brightest (risk case), Base = most muted — intentional hierarchy
+var CHART_COLORS = { base: '#75B8BD', mid: '#9DD5CC', high: '#17E88F' };
 var SC_LABELS = { base: 'Base', mid: 'Mid', high: 'High' };
 
 // ─── MODE SELECTION ──────────────────────────────────────────────────────────
@@ -897,7 +911,7 @@ function buildBuildingCard(b) {
 
 // ─── EXPANSION OPTIONS CRUD ──────────────────────────────────────────────────
 function addExpansionOption() {
-  expansionOptions.push({ id: ++_xoid, label: '', sf: 0 });
+  expansionOptions.push({ id: ++_xoid, label: '', sf: 0, seats: 0 });
   renderExpansionOptions();
   recompute();
 }
@@ -912,13 +926,17 @@ function updateExpansionOption(id, field, val) {
   var opt = expansionOptions.find ? expansionOptions.find(function(o){ return o.id===id; })
     : (function(){ for(var i=0;i<expansionOptions.length;i++) if(expansionOptions[i].id===id) return expansionOptions[i]; return null; })();
   if (!opt) return;
-  opt[field] = field === 'sf' ? (parseInt(val)||0) : val;
+  opt[field] = (field === 'sf' || field === 'seats') ? (parseInt(val)||0) : val;
   // Update only the derived hint — do NOT call renderExpansionOptions() here
   // because that would destroy/recreate the inputs and steal focus mid-typing
   var hint = document.getElementById('xo-hint-'+id);
   if (hint) {
-    var addSeats = (state.targetDensity>0 && opt.sf>0) ? Math.round(opt.sf/state.targetDensity) : 0;
-    hint.textContent = addSeats>0 ? '≈ +'+addSeats.toLocaleString()+' seats at '+state.targetDensity+' SF/seat' : '';
+    var addSeats = opt.seats > 0 ? opt.seats
+      : (state.targetDensity>0 && opt.sf>0) ? Math.round(opt.sf/state.targetDensity) : 0;
+    var hintMsg = addSeats > 0
+      ? (opt.seats > 0 ? '+'+addSeats.toLocaleString()+' seats (direct input)' : '≈ +'+addSeats.toLocaleString()+' seats at '+state.targetDensity+' SF/seat')
+      : '';
+    hint.textContent = hintMsg;
     hint.style.display = addSeats>0 ? '' : 'none';
   }
   updateExpansionBadge();
@@ -934,7 +952,7 @@ function renderExpansionOptions() {
     var letter = LETTERS[idx] || (idx+1).toString();
     var col = XO_COLORS[idx] || XO_COLORS[XO_COLORS.length-1];
     var colSolid = idx===0 ? '#80BBAD' : idx===1 ? '#538184' : '#A0C4C8';
-    var addSeats = (state.targetDensity>0 && opt.sf>0) ? Math.round(opt.sf/state.targetDensity) : 0;
+    var addSeats = opt.seats > 0 ? opt.seats : (state.targetDensity>0 && opt.sf>0 ? Math.round(opt.sf/state.targetDensity) : 0);
     h += '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:.6rem .75rem;margin-bottom:.5rem">'
       + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.45rem">'
       + '<span style="font-size:.7rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:'+colSolid+'">Option '+letter+'</span>'
@@ -946,11 +964,15 @@ function renderExpansionOptions() {
       + '<input type="text" class="text-input" style="font-size:.8rem;padding:.4rem .6rem" value="'+esc(opt.label||'')+'" placeholder="e.g. Suite 810" oninput="updateExpansionOption('+opt.id+',\'label\',this.value)"/>'
       + '</div>'
       + '<div class="input-group-sm">'
-      + '<label class="input-label">Additional SF</label>'
-      + '<input type="number" class="num-input" style="padding:.4rem .6rem" value="'+(opt.sf||'')+'" placeholder="9500" min="0" oninput="updateExpansionOption('+opt.id+',\'sf\',this.value)"/>'
+      + '<label class="input-label" title="Square footage of the suite — seats will be derived from Target SF/Seat">SF</label>'
+      + '<input type="number" class="num-input" style="padding:.4rem .6rem" value="'+(opt.sf||'')+'" placeholder="9,500" min="0" oninput="updateExpansionOption('+opt.id+',\'sf\',this.value)"/>'
+      + '</div>'
+      + '<div class="input-group-sm">'
+      + '<label class="input-label" title="Override: enter seats directly instead of deriving from SF">Seats</label>'
+      + '<input type="number" class="num-input" style="padding:.4rem .6rem" value="'+(opt.seats||'')+'" placeholder="or #" min="0" oninput="updateExpansionOption('+opt.id+',\'seats\',this.value)"/>'
       + '</div>'
       + '</div>'
-      + '<div id="xo-hint-'+opt.id+'" style="font-size:.65rem;color:'+colSolid+';margin-top:.35rem'+(addSeats>0?'':';display:none')+'">'+(addSeats>0?'≈ +'+addSeats.toLocaleString()+' seats at '+state.targetDensity+' SF/seat':'')+'</div>'
+      + '<div id="xo-hint-'+opt.id+'" style="font-size:.65rem;color:'+colSolid+';margin-top:.35rem'+(addSeats>0?'':';display:none')+'">'+(addSeats>0?(opt.seats>0?'+'+addSeats.toLocaleString()+' seats (direct input)':'≈ +'+addSeats.toLocaleString()+' seats at '+state.targetDensity+' SF/seat'):'')+'</div>'
       + '</div>';
   });
   container.innerHTML = h;
@@ -1017,7 +1039,7 @@ function updateHCPreview() {
   if (!el) return;
   if (!state.currentHC || state.currentHC<=0) { el.innerHTML=''; return; }
   var years = [];
-  for (var i=0;i<=5;i++) years.push(state.baseYear+i);
+  for (var i=0;i<=(state.planningHorizon||5);i++) years.push(state.baseYear+i);
   var h = '<div class="hc-preview">'
     + '<div class="hcp-row header">'
     + '<span class="hcp-cell">Year</span>'
@@ -1042,7 +1064,7 @@ function updateHCPreview() {
 
 // ─── COMPUTE ────────────────────────────────────────────────────────────────
 function compute() {
-  var N = 5;
+  var N = state.planningHorizon || 5;
   var years = [];
   for (var i=0;i<=N;i++) years.push(state.baseYear+i);
 
@@ -1112,8 +1134,8 @@ function compute() {
   var expansionScenarios = [];
   var XLETTERS = ['A','B','C','D'];
   expansionOptions.forEach(function(opt, idx) {
-    if (!opt.sf || opt.sf<=0 || state.targetDensity<=0) return;
-    var addSeats = Math.round(opt.sf/state.targetDensity);
+    var addSeats = opt.seats > 0 ? opt.seats
+      : (opt.sf > 0 && state.targetDensity > 0 ? Math.round(opt.sf/state.targetDensity) : 0);
     if (addSeats<=0) return;
     var xSupply = supply.map(function(s){ return s+addSeats; });
     var xGapYears = {};
@@ -1122,14 +1144,24 @@ function compute() {
       demand[key].forEach(function(dd,i){ if(gi<0 && dd.peak>xSupply[i]) gi=i; });
       xGapYears[key] = gi>=0 ? years[gi] : null;
     });
+    var xVibrancy = {};
+    scKeys.forEach(function(key){
+      xVibrancy[key] = demand[key].map(function(d,i){
+        var pct = xSupply[i]>0 ? Math.round(d.peak/xSupply[i]*100) : 0;
+        var zone = pct < state.vibrancyThreshold ? 'under'
+                 : pct > state.oversubscribedThreshold ? 'over' : 'vibrant';
+        return {yr:d.yr, peak:d.peak, pct:pct, zone:zone};
+      });
+    });
     expansionScenarios.push({
       id: opt.id,
       label: opt.label || ('Suite '+XLETTERS[idx]),
       letter: XLETTERS[idx] || (idx+1).toString(),
-      sf: opt.sf, addSeats: addSeats,
+      sf: opt.sf, seats: opt.seats, addSeats: addSeats,
       totalSeats: supply[0]+addSeats,
       supply: xSupply,
       gapYears: xGapYears,
+      vibrancy: xVibrancy,
     });
   });
 
@@ -1341,17 +1373,24 @@ function buildStatCards(d) {
   var surpColor = d.curSurp >= 0 ? '#17E88F' : '#538184';
   var gapBase = d.gapYears.base ? d.gapYears.base.toString() : '> '+d.years[d.years.length-1];
   var gapColor = d.gapYears.base ? (d.gapYears.base <= state.baseYear+2 ? '#538184' : '#80BBAD') : '#17E88F';
-  var peakLabel = state.assignedSeating ? 'Seats Required' : 'Peak Daily Demand';
-  var peakSub   = state.assignedSeating ? '1:1 assigned seating' : state.attendanceRate+'% attendance rate';
+  var peakLabel = state.assignedSeating ? 'Seats Required' : 'Peak Day Demand';
+  var peakSub   = state.assignedSeating ? '1:1 assigned seating' : state.attendanceRate+'% peak attendance';
 
-  return '<div class="stat-row">'
+  var cards = '<div class="stat-row">'
     + statCard(d.curSup.toLocaleString(), 'Seat Supply', buildings.length+' bldg'+(buildings.length!==1?'s':''), '')
     + statCard(state.currentHC.toLocaleString(), 'Current Headcount', state.baseYear+' base', '')
-    + statCard(d.curPeak.toLocaleString(), peakLabel, peakSub, '')
-    + statCard(d.curUtil+'%', 'Utilization Today', utilLabel, utilColor)
-    + statCard((d.curSurp>=0?'+':'')+d.curSurp.toLocaleString(), d.curSurp>=0?'Seat Surplus':'Seat Deficit', 'seats vs. demand today', surpColor)
-    + statCard(gapBase, 'Gap Year (Base)', 'first year demand exceeds supply', gapColor)
+    + statCard(d.curPeak.toLocaleString(), peakLabel, peakSub, '');
+
+  if (!state.assignedSeating && state.avgAttendanceRate > 0) {
+    var avgPeak = Math.round(state.currentHC * state.avgAttendanceRate / 100);
+    cards += statCard(avgPeak.toLocaleString(), 'Avg Day Demand', state.avgAttendanceRate+'% avg attendance', '');
+  }
+
+  cards += statCard(d.curUtil+'%', 'Utilization Today', utilLabel, utilColor)
+    + statCard((d.curSurp>=0?'+':'')+d.curSurp.toLocaleString(), d.curSurp>=0?'Seat Surplus':'Seat Deficit', 'seats vs. peak demand today', surpColor)
+    + statCard(gapBase, 'Gap Year (Base)', 'first year peak demand exceeds supply', gapColor)
     + '</div>';
+  return cards;
 }
 
 function statCard(val, label, sub, color) {
@@ -1397,9 +1436,9 @@ function buildChart(d) {
     + '<div class="chart-legend">'
     + '<span style="color:rgba(242,244,243,.55)">─ ─ Supply</span>'
     + legendExtras
-    + '<span style="color:'+CHART_COLORS.base+'">— Base</span>'
-    + '<span style="color:'+CHART_COLORS.mid+'">— Mid</span>'
-    + '<span style="color:'+CHART_COLORS.high+'">— High</span>'
+    + '<span style="color:'+CHART_COLORS.base+'" title="Base: conservative floor-case growth assumption">— Base</span>'
+    + '<span style="color:'+CHART_COLORS.mid+'" title="Mid: expected / most-likely growth trajectory">— Mid</span>'
+    + '<span style="color:'+CHART_COLORS.high+'" title="High: stress-test risk case — biggest exposure if unprepared">— High ⚠</span>'
     + '</div></div>'
     + buildSVG(d)
     + (state.showVibrancy ? '<div style="font-size:.65rem;color:rgba(242,244,243,.3);margin-top:.5rem;line-height:1.5">Green band = vibrancy zone ('+state.vibrancyThreshold+'%–'+state.oversubscribedThreshold+'% occupancy) &nbsp;·&nbsp; Below = under-vibrant · Above = oversubscribed &nbsp;·&nbsp; Shaded area = Base–High demand range</div>' : '')
@@ -1408,8 +1447,8 @@ function buildChart(d) {
 }
 
 function buildSVG(d) {
-  var W=780, H=270;
-  var M={top:18,right:90,bottom:38,left:58};
+  var W=780, H=340;
+  var M={top:22,right:90,bottom:42,left:62};
   var cw=W-M.left-M.right, ch=H-M.top-M.bottom;
 
   var allVals = d.supply.concat(
@@ -1511,9 +1550,27 @@ function buildSVG(d) {
       }
     }
 
-    // End label
+    // End label + seat delta annotation
     var last = d.demand[key][d.demand[key].length-1];
+    var lastSup = d.supply[d.years.length-1];
+    var lastGap = lastSup - last.peak;
     svg += '<text x="'+(W-M.right+6)+'" y="'+(yp(last.peak)+4)+'" font-size="9" font-weight="700" fill="'+CHART_COLORS[key]+'">'+SC_LABELS[key]+'</text>';
+    if (Math.abs(lastGap) > 0) {
+      var gapTxt = (lastGap >= 0 ? '+' : '') + lastGap.toLocaleString();
+      var gapY = yp(last.peak) + 13;
+      svg += '<text x="'+(W-M.right+6)+'" y="'+gapY+'" font-size="8" fill="'+CHART_COLORS[key]+'" opacity=".6">'+gapTxt+'</text>';
+    }
+
+    // Gap year deficit annotation (inline, above the circle)
+    if (d.gapYears[key]) {
+      var gi = d.years.indexOf(d.gapYears[key]);
+      if (gi>=0) {
+        var gDef = d.supply[gi] - d.demand[key][gi].peak;
+        var annX = xp(gi);
+        var annY = yp(d.demand[key][gi].peak) - 14;
+        svg += '<text x="'+annX+'" y="'+annY+'" text-anchor="middle" font-size="8" font-weight="700" fill="'+CHART_COLORS[key]+'" opacity=".85">'+gDef.toLocaleString()+'</text>';
+      }
+    }
   });
 
   // X axis
@@ -2020,7 +2077,7 @@ function buildConsolidationScenarios(d, rs) {
 
 // ─── RELOCATE COMPUTE ────────────────────────────────────────────────────────
 function computeRelocate() {
-  var N = 5;
+  var N = state.planningHorizon || 5;
   var years = [];
   for (var i=0;i<=N;i++) years.push(state.baseYear+i);
 
@@ -2124,6 +2181,9 @@ function loadSample() {
   state.oversubscribedThreshold = 80;
   state.targetDensity = 175; // 2026 GWOIR TMT benchmark
 
+  state.planningHorizon = 5;
+  state.avgAttendanceRate = 0;
+
   _bid=0; _fid=0; _eid=0; _xoid=0;
   buildings = [{
     id:++_bid, name:'HQ Office', seats:0, rsf:66753, expansions:[]
@@ -2131,16 +2191,18 @@ function loadSample() {
 
   // Sample expansion options (Brennan Center-style adjacent suites)
   expansionOptions = [
-    { id:++_xoid, label:'Suite 810',  sf:9500  },
-    { id:++_xoid, label:'Suite 1200', sf:15000 },
+    { id:++_xoid, label:'Suite 810',  sf:9500,  seats:0 },
+    { id:++_xoid, label:'Suite 1200', sf:15000, seats:0 },
   ];
 
   var set = function(id, val){ var el=document.getElementById(id); if(el) el.value=val; };
-  set('clientName',    state.clientName);
-  set('sectorSelect',  state.sector);
-  set('currentHC',     state.currentHC);
-  set('baseYear',      state.baseYear);
-  set('attendanceRate',state.attendanceRate);
+  set('clientName',        state.clientName);
+  set('sectorSelect',      state.sector);
+  set('currentHC',         state.currentHC);
+  set('baseYear',          state.baseYear);
+  set('planningHorizon',   state.planningHorizon);
+  set('attendanceRate',    state.attendanceRate);
+  set('avgAttendanceRate', '');
   set('rateBase',      state.scenarios.base.rate);
   set('rateMid',       state.scenarios.mid.rate);
   set('rateHigh',      state.scenarios.high.rate);
@@ -2280,6 +2342,8 @@ function exportExcel() {
 (function(){
   var byEl = document.getElementById('baseYear');
   if (byEl) byEl.value = state.baseYear;
+  var phEl = document.getElementById('planningHorizon');
+  if (phEl) phEl.value = state.planningHorizon;
   // Hide main page until a mode is selected
   document.getElementById('sd-page').style.display = 'none';
   var mb = document.getElementById('mode-badge'); if(mb) mb.style.display='none';
