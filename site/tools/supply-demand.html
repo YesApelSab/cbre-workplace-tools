@@ -361,6 +361,63 @@ select.text-input option{background:#001A14;color:#F2F4F3;}
 </head>
 <body>
 
+<!-- PASSWORD GATE MODAL -->
+<div id="pw-gate" style="
+  position:fixed;inset:0;z-index:9999;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(0,14,9,.92);
+  backdrop-filter:blur(8px);
+  font-family:'DM Sans',Arial,sans-serif;
+">
+  <div style="
+    background:#012A2D;
+    border:1px solid rgba(23,232,143,.25);
+    border-radius:16px;
+    padding:2.5rem 2.75rem;
+    width:100%;max-width:380px;
+    text-align:center;
+    box-shadow:0 24px 64px rgba(0,0,0,.55);
+  ">
+    <div style="font-size:1.85rem;margin-bottom:.35rem">🔒</div>
+    <div style="font-size:1.1rem;font-weight:700;color:#F2F4F3;margin-bottom:.2rem">Supply &amp; Demand Tool</div>
+    <div style="font-size:.78rem;color:rgba(242,244,243,.45);margin-bottom:1.5rem">CBRE Workplace Advisory · Restricted Access</div>
+    <input id="pw-input" type="password" placeholder="Enter access code"
+      style="
+        width:100%;box-sizing:border-box;
+        padding:.7rem 1rem;
+        background:rgba(242,244,243,.06);
+        border:1px solid rgba(242,244,243,.15);
+        border-radius:8px;
+        color:#F2F4F3;
+        font-size:.92rem;
+        font-family:inherit;
+        outline:none;
+        margin-bottom:.65rem;
+        text-align:center;
+        letter-spacing:.08em;
+      "
+      onkeydown="if(event.key==='Enter')checkPW()"
+    />
+    <div id="pw-error" style="
+      font-size:.72rem;color:#ff6b6b;
+      min-height:1rem;margin-bottom:.6rem;
+      display:none;
+    ">Incorrect access code. Try again.</div>
+    <button onclick="checkPW()" style="
+      width:100%;padding:.7rem;
+      background:var(--accent,#17E88F);
+      color:#003F2D;
+      border:none;border-radius:8px;
+      font-size:.9rem;font-weight:700;
+      cursor:pointer;
+      font-family:inherit;
+    ">Unlock</button>
+    <div style="font-size:.65rem;color:rgba(242,244,243,.22);margin-top:1.1rem">
+      Contact your CBRE advisor for the access code.
+    </div>
+  </div>
+</div>
+
 <!-- SCENARIO PICKER OVERLAY -->
 <div id="mode-picker" class="mode-picker-overlay">
   <div class="mode-picker-inner">
@@ -380,12 +437,11 @@ select.text-input option{background:#001A14;color:#F2F4F3;}
         <div class="mode-card-q">"When do we run out of space?"</div>
         <div class="mode-card-desc">Track headcount growth against seat supply. Find the gap year and plan for expansion.</div>
       </div>
-      <div class="mode-card mode-card-soon">
+      <div class="mode-card" onclick="selectMode('relocate')">
         <div class="mode-card-icon">📍</div>
         <div class="mode-card-name">Relocating</div>
         <div class="mode-card-q">"We're moving. How big should our next office be?"</div>
-        <div class="mode-card-desc">Enter headcount and density targets to get a recommended RSF range for your new space.</div>
-        <div class="mode-card-soon-badge">Coming Soon</div>
+        <div class="mode-card-desc">Model SF requirements across growth scenarios. Get a clear search range sized to your lease term.</div>
       </div>
       <div class="mode-card mode-card-soon">
         <div class="mode-card-icon">🔄</div>
@@ -485,6 +541,38 @@ select.text-input option{background:#001A14;color:#F2F4F3;}
           <div id="xopts-container"></div>
           <button class="btn-add-building" onclick="addExpansionOption()">+ Add Available Suite</button>
           <div class="input-hint" style="margin-top:.5rem">Enter suites you're considering taking on. Each becomes an alternative supply scenario on the chart.</div>
+        </div>
+      </div>
+
+      <!-- Accordion: Lease & Space Options (relocate mode only) -->
+      <div class="accordion" id="acc-relocate-opts" style="display:none">
+        <div class="accordion-head" onclick="toggleAcc('relocate-opts')">
+          <span>🏗️ Lease & Space Options</span>
+          <span class="acc-arrow" id="arr-relocate-opts">▲</span>
+        </div>
+        <div class="accordion-body" id="body-relocate-opts">
+          <div class="input-group">
+            <label class="input-label">Lease Term</label>
+            <div class="input-with-unit">
+              <input type="number" class="num-input-sm" id="leaseTerm" min="1" max="20" value="5" oninput="state.leaseTerm=parseInt(this.value)||5;syncLeasePreset();recompute()"/>
+              <span class="unit">years</span>
+            </div>
+            <div class="att-presets" id="lease-presets">
+              <button class="att-preset" onclick="setLeaseTerm(3)" data-lease="3">3 yr</button>
+              <button class="att-preset active" onclick="setLeaseTerm(5)" data-lease="5">5 yr</button>
+              <button class="att-preset" onclick="setLeaseTerm(7)" data-lease="7">7 yr</button>
+              <button class="att-preset" onclick="setLeaseTerm(10)" data-lease="10">10 yr</button>
+            </div>
+            <div class="input-hint">Sizes the Space Brief to cover growth through your lease term — longer term = larger buffer needed.</div>
+          </div>
+          <div class="input-group">
+            <label class="input-label">Proposed Space <span style="font-weight:400;opacity:.4;text-transform:none;letter-spacing:0">— optional</span></label>
+            <div class="input-with-unit">
+              <input type="number" class="num-input-sm" id="proposedSF" min="0" placeholder="—" oninput="state.proposedSF=parseInt(this.value)||0;recompute()"/>
+              <span class="unit">SF</span>
+            </div>
+            <div class="input-hint">Enter a specific space you're evaluating to see how long it lasts under each growth scenario.</div>
+          </div>
         </div>
       </div>
 
@@ -666,6 +754,8 @@ var state = {
   currentHC: 0,
   baseYear: new Date().getFullYear(),
   planningHorizon: 5,
+  leaseTerm: 5,
+  proposedSF: 0,
   attendanceRate: 65,
   avgAttendanceRate: 0,
   scenarios: {
@@ -684,7 +774,7 @@ var state = {
 var MODE_META = {
   grow:      { icon: '🌱', label: 'Growing',     desc: 'Track headcount growth against seat supply. Find the gap year and plan for expansion.' },
   rightsize: { icon: '✂️', label: 'Right-Sizing', desc: 'Calculate your minimum viable footprint, test exiting each location, find the optimal consolidation path.' },
-  relocate:  { icon: '📍', label: 'Relocating',   desc: 'Enter headcount and density targets to get a recommended RSF range for your new space.' },
+  relocate:  { icon: '📍', label: 'Relocating',   desc: 'Size your next office for your headcount and lease term. Get a search range in SF across three growth scenarios.' },
 };
 var buildings = [];
 var _bid = 0, _fid = 0, _eid = 0;
@@ -692,6 +782,34 @@ var expansionOptions = [];
 var _xoid = 0;
 var XO_COLORS = ['rgba(128,187,173,.85)', 'rgba(83,129,132,.9)', 'rgba(160,196,200,.85)'];
 var SC_COLORS = { base: '#538184', mid: '#80BBAD', high: '#17E88F' };
+// ─── PASSWORD GATE ───────────────────────────────────────────────────────────
+(function(){
+  var gate = document.getElementById('pw-gate');
+  if (!gate) return;
+  if (sessionStorage.getItem('sd-auth') === '1') { gate.style.display = 'none'; return; }
+  // block scroll on main page until unlocked
+  document.body.style.overflow = 'hidden';
+  setTimeout(function(){ var inp = document.getElementById('pw-input'); if(inp) inp.focus(); }, 80);
+})();
+
+function checkPW() {
+  var inp = document.getElementById('pw-input');
+  var err = document.getElementById('pw-error');
+  if (!inp) return;
+  if (inp.value === 'CONSULTING2026YS') {
+    sessionStorage.setItem('sd-auth', '1');
+    var gate = document.getElementById('pw-gate');
+    if (gate) gate.style.display = 'none';
+    document.body.style.overflow = '';
+  } else {
+    if (err) { err.style.display = 'block'; }
+    inp.value = '';
+    inp.focus();
+    inp.style.borderColor = 'rgba(255,107,107,.5)';
+    setTimeout(function(){ if(inp) inp.style.borderColor = 'rgba(242,244,243,.15)'; }, 1200);
+  }
+}
+
 // High = brightest (risk case), Base = most muted — intentional hierarchy
 var CHART_COLORS = { base: '#75B8BD', mid: '#9DD5CC', high: '#17E88F' };
 var SC_LABELS = { base: 'Base', mid: 'Mid', high: 'High' };
@@ -721,6 +839,10 @@ function selectMode(mode) {
   // Show expansion options only in grow mode
   var xoEl = document.getElementById('acc-expansion-opts');
   if (xoEl) xoEl.style.display = mode === 'grow' ? '' : 'none';
+
+  // Show relocate options only in relocate mode
+  var relEl = document.getElementById('acc-relocate-opts');
+  if (relEl) relEl.style.display = mode === 'relocate' ? '' : 'none';
 
   recompute();
 }
@@ -777,8 +899,23 @@ function setAttendance(val) {
 
 function syncAttPreset() {
   var val = state.attendanceRate;
-  document.querySelectorAll('.att-preset').forEach(function(btn){
+  document.querySelectorAll('.att-preset[data-val]').forEach(function(btn){
     btn.classList.toggle('active', parseInt(btn.getAttribute('data-val')) === val);
+  });
+}
+
+function setLeaseTerm(val) {
+  state.leaseTerm = val;
+  var el = document.getElementById('leaseTerm');
+  if (el) el.value = val;
+  syncLeasePreset();
+  recompute();
+}
+
+function syncLeasePreset() {
+  var val = state.leaseTerm;
+  document.querySelectorAll('.att-preset[data-lease]').forEach(function(btn){
+    btn.classList.toggle('active', parseInt(btn.getAttribute('data-lease')) === val);
   });
 }
 
@@ -2097,71 +2234,279 @@ function computeRelocate() {
 }
 
 function buildRelocateDashboard(relData) {
-  var h = '';
-  var curPeak = Math.round(state.currentHC*state.attendanceRate/100);
-  var sfToday = state.targetDensity>0 ? Math.round(curPeak*state.targetDensity) : 0;
-  var endBase = relData.demand.base[relData.demand.base.length-1];
-  var endMid  = relData.demand.mid[relData.demand.mid.length-1];
-  var endHigh = relData.demand.high[relData.demand.high.length-1];
-  var endYear = relData.years[relData.years.length-1];
+  var n = relData.years.length;
+  var ltIdx = Math.min(state.leaseTerm, n - 1);
+  var ltYr  = relData.years[ltIdx];
+  var sfToday = state.targetDensity > 0 ? relData.demand.base[0].sfNeeded : 0;
+  var hasDensity = state.targetDensity > 0;
 
-  // Stat row
+  var h = '';
+
+  // 1 — Space Brief (main callout, sized to lease term)
+  h += buildSpaceBriefCard(relData, ltIdx, ltYr, sfToday, hasDensity);
+
+  // 2 — Stat row
+  var curPeak = relData.demand.base[0].peak;
+  var ltDemand = { base: relData.demand.base[ltIdx], mid: relData.demand.mid[ltIdx], high: relData.demand.high[ltIdx] };
   h += '<div class="stat-row">';
   h += statCard(state.currentHC.toLocaleString(), 'Current Headcount', state.baseYear+' base', '');
-  h += statCard(curPeak.toLocaleString(), 'Peak Attendance', state.attendanceRate+'% of HC', '');
-  if (sfToday>0) {
-    h += statCard(sfToday.toLocaleString()+' SF', 'Space Needed Today', 'at '+state.targetDensity+' SF/seat', '#17E88F');
-    h += statCard(endBase.sfNeeded.toLocaleString()+' SF', 'Base SF in '+endYear, 'low growth end of horizon', SC_COLORS.base);
-    h += statCard(endMid.sfNeeded.toLocaleString()+' SF', 'Mid SF in '+endYear, 'mid growth end of horizon', SC_COLORS.mid);
-    h += statCard(endHigh.sfNeeded.toLocaleString()+' SF', 'High SF in '+endYear, 'high growth end of horizon', SC_COLORS.high);
+  h += statCard(curPeak.toLocaleString(), 'Peak Attendance Today', state.attendanceRate+'% of HC', '');
+  if (hasDensity) {
+    h += statCard(sfToday.toLocaleString()+' SF', 'Space Needed Today', curPeak.toLocaleString()+' seats × '+state.targetDensity, '#17E88F');
+    h += statCard(ltDemand.base.sfNeeded.toLocaleString()+' SF', 'Base Req · '+ltYr, 'conservative at lease term', SC_COLORS.base);
+    h += statCard(ltDemand.mid.sfNeeded.toLocaleString()+' SF', 'Mid Req · '+ltYr, 'expected at lease term', SC_COLORS.mid);
+    h += statCard(ltDemand.high.sfNeeded.toLocaleString()+' SF', 'High Req · '+ltYr, 'risk case at lease term', SC_COLORS.high);
   } else {
-    h += statCard('—', 'Space Needed Today', 'set Target SF/Seat in Model Assumptions', 'rgba(242,244,243,.3)');
-    h += statCard('—', 'Base SF in '+endYear, '', 'rgba(242,244,243,.3)');
-    h += statCard('—', 'Mid SF in '+endYear, '', 'rgba(242,244,243,.3)');
-    h += statCard('—', 'High SF in '+endYear, 'set Target SF/Seat to calculate', 'rgba(242,244,243,.3)');
+    h += statCard('—', 'Space Needed Today', 'set Target SF/Seat', 'rgba(242,244,243,.3)');
+    h += statCard('—', 'Base at '+ltYr, '', 'rgba(242,244,243,.3)');
+    h += statCard('—', 'Mid at '+ltYr, '', 'rgba(242,244,243,.3)');
+    h += statCard('—', 'High at '+ltYr, 'set Target SF/Seat', 'rgba(242,244,243,.3)');
   }
   h += '</div>';
 
-  // Space Brief recommendation
-  if (sfToday>0) {
-    h += '<div class="chart-card">'
-      + '<div class="chart-card-head"><div class="chart-title">Space Brief — Recommended Size Range</div></div>'
-      + '<div class="brief-cards">'
-      + '<div class="brief-card"><div class="brief-card-label">Minimum</div><div class="brief-card-val">'+sfToday.toLocaleString()+'</div><div class="brief-card-sub">SF · today\'s requirement<br>'+curPeak.toLocaleString()+' peak seats × '+state.targetDensity+' SF/seat</div></div>'
-      + '<div class="brief-card"><div class="brief-card-label">Recommended</div><div class="brief-card-val">'+endMid.sfNeeded.toLocaleString()+'</div><div class="brief-card-sub">SF · mid-growth by '+endYear+'<br>'+endMid.peak.toLocaleString()+' peak seats × '+state.targetDensity+' SF/seat</div></div>'
-      + '<div class="brief-card"><div class="brief-card-label">Maximum</div><div class="brief-card-val">'+endHigh.sfNeeded.toLocaleString()+'</div><div class="brief-card-sub">SF · high-growth by '+endYear+'<br>'+endHigh.peak.toLocaleString()+' peak seats × '+state.targetDensity+' SF/seat</div></div>'
-      + '</div>'
-      + '<div class="brief-note">Based on '+state.attendanceRate+'% peak attendance × '+state.targetDensity+' SF/seat density target. '
-      + 'The Recommended range accounts for mid-growth trajectory through '+endYear+'. '
-      + 'Minimum covers today\'s needs only; Maximum provides headroom for the high-growth scenario.</div>'
-      + '</div>';
-  } else {
-    h += '<div class="chart-card" style="padding:1.5rem;text-align:center;">'
-      + '<div style="font-size:.85rem;color:var(--text-muted);margin-bottom:.5rem">To see your Space Brief, enter a <strong style="color:var(--text)">Target SF / Seat</strong> in Model Assumptions.</div>'
-      + '<div style="font-size:.75rem;color:rgba(242,244,243,.35)">e.g. 150 SF/seat for open plan · 200 SF/seat for mixed · 250 SF/seat for private office</div>'
+  // 3 — SF Need chart (only when density is set)
+  h += buildRelocateSFChart(relData);
+
+  // 4 — Proposed space runway (only when proposedSF is set)
+  if (state.proposedSF > 0 && hasDensity) h += buildRunwayAnalysis(relData);
+
+  // 5 — Year-by-year table
+  h += buildRelocateYearTable(relData, hasDensity);
+
+  return h;
+}
+
+function buildSpaceBriefCard(relData, ltIdx, ltYr, sfToday, hasDensity) {
+  if (!hasDensity) {
+    return '<div class="chart-card" style="text-align:center;padding:2rem 1.5rem">'
+      + '<div style="font-size:2rem;margin-bottom:.75rem;opacity:.3">🔍</div>'
+      + '<div style="font-size:.88rem;font-weight:600;color:var(--text);margin-bottom:.4rem">Set a Target SF / Seat to generate your Space Brief</div>'
+      + '<div style="font-size:.76rem;color:var(--text-muted);line-height:1.7">Select a sector above to auto-apply the GWOIR benchmark, or enter a custom value in <strong>Model Assumptions</strong>.<br>e.g. 150–175 SF/seat open plan · 200–250 SF/seat mixed/private</div>'
       + '</div>';
   }
 
-  // Year-by-year table
-  h += '<div class="chart-card"><div class="chart-title" style="margin-bottom:.85rem">Year-by-Year Projection</div>'
+  var ltD = { base: relData.demand.base[ltIdx], mid: relData.demand.mid[ltIdx], high: relData.demand.high[ltIdx] };
+  var sfBase  = ltD.base.sfNeeded;
+  var sfMid   = ltD.mid.sfNeeded;
+  var sfHigh  = ltD.high.sfNeeded;
+  var seatsToday = relData.demand.base[0].peak;
+  var sectorStr = state.sector ? state.sector : '';
+  var ltLabel = state.leaseTerm+'-yr term';
+
+  var h = '<div class="chart-card" style="background:rgba(23,232,143,.04);border-color:rgba(23,232,143,.22)">';
+  h += '<div class="chart-card-head">';
+  h += '<div class="chart-title" style="color:rgba(23,232,143,.8)">Space Search Brief</div>';
+  if (sectorStr) h += '<div style="font-size:.72rem;color:var(--text-muted)">'+state.targetDensity+' SF/seat · 2026 GWOIR · '+sectorStr+'</div>';
+  h += '</div>';
+
+  // Three pillars
+  h += '<div class="brief-cards">';
+  h += '<div class="brief-card" style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08)">'
+     + '<div class="brief-card-label" style="color:rgba(242,244,243,.45)">Minimum</div>'
+     + '<div class="brief-card-val" style="color:var(--text);font-size:1.65rem">'+sfToday.toLocaleString()+'</div>'
+     + '<div class="brief-card-sub">SF today · '+seatsToday.toLocaleString()+' peak seats<br>Covers current headcount only</div>'
+     + '</div>';
+  h += '<div class="brief-card" style="background:rgba(23,232,143,.07);border:1px solid rgba(23,232,143,.28)">'
+     + '<div class="brief-card-label" style="color:var(--accent)">'+ltLabel+' Target ★</div>'
+     + '<div class="brief-card-val" style="font-size:1.65rem">'+sfMid.toLocaleString()+'</div>'
+     + '<div class="brief-card-sub">SF · mid-growth by '+ltYr+'<br>'+ltD.mid.peak.toLocaleString()+' peak seats × '+state.targetDensity+' SF/seat</div>'
+     + '</div>';
+  h += '<div class="brief-card" style="background:rgba(128,187,173,.06);border:1px solid rgba(128,187,173,.2)">'
+     + '<div class="brief-card-label" style="color:#80BBAD">High-Growth Buffer</div>'
+     + '<div class="brief-card-val" style="color:#80BBAD;font-size:1.65rem">'+sfHigh.toLocaleString()+'</div>'
+     + '<div class="brief-card-sub">SF · high-growth by '+ltYr+'<br>'+ltD.high.peak.toLocaleString()+' peak seats × '+state.targetDensity+' SF/seat</div>'
+     + '</div>';
+  h += '</div>';
+
+  // Search range banner
+  var diffPct = sfMid > 0 ? Math.round((sfHigh-sfMid)/sfMid*100) : 0;
+  h += '<div style="margin-top:1rem;padding:.85rem 1.1rem;background:rgba(23,232,143,.08);border:1px solid rgba(23,232,143,.25);border-radius:9px;display:flex;align-items:center;gap:.9rem;flex-wrap:wrap">'
+     + '<div style="font-size:1.4rem;line-height:1">🔍</div>'
+     + '<div style="flex:1;min-width:200px">'
+     + '<div style="font-size:1rem;font-weight:700;color:var(--accent);margin-bottom:.2rem">Search range: '+sfMid.toLocaleString()+' – '+sfHigh.toLocaleString()+' SF</div>'
+     + '<div style="font-size:.78rem;color:var(--text-muted);line-height:1.65">Target covers mid-growth through your '+state.leaseTerm+'-year lease. Buffer adds '+diffPct+'% headroom for the high scenario. '
+     + 'At '+state.targetDensity+' SF/seat, that\'s '+ltD.mid.peak.toLocaleString()+' – '+ltD.high.peak.toLocaleString()+' seats.</div>'
+     + '</div>'
+     + '</div>';
+
+  h += '</div>';
+  return h;
+}
+
+function buildRelocateSFChart(relData) {
+  if (!state.targetDensity || state.targetDensity <= 0) return '';
+  var n = relData.years.length;
+  var W=780, H=300, M={top:22,right:110,bottom:42,left:72};
+  var cw=W-M.left-M.right, ch=H-M.top-M.bottom;
+
+  var allVals = relData.demand.high.map(function(d){ return d.sfNeeded; });
+  if (state.proposedSF > 0) allVals.push(state.proposedSF);
+  var rawMax = Math.max.apply(null, allVals);
+  var yMax = Math.ceil(rawMax*1.2/1000)*1000 || 1000;
+
+  var xp = function(i){ return M.left+(i/(n-1))*cw; };
+  var yp = function(v){ return M.top+ch-(v/yMax)*ch; };
+
+  var svg = '<svg viewBox="0 0 '+W+' '+H+'" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="DM Sans,Arial,sans-serif" style="display:block">';
+
+  // Grid
+  for (var g=0;g<=4;g++) {
+    var gv=(g/4)*yMax, gy=yp(gv);
+    svg += '<line x1="'+M.left+'" y1="'+gy+'" x2="'+(W-M.right)+'" y2="'+gy+'" stroke="rgba(255,255,255,.07)" stroke-width="1"/>';
+    var lbl=gv>=1000?(gv/1000).toFixed(0)+'k':Math.round(gv).toString();
+    svg += '<text x="'+(M.left-7)+'" y="'+(gy+4)+'" text-anchor="end" font-size="9" fill="rgba(242,244,243,.35)">'+lbl+'</text>';
+  }
+
+  // Background panel
+  svg += '<rect x="'+M.left+'" y="'+M.top+'" width="'+cw+'" height="'+ch+'" fill="rgba(255,255,255,.025)" rx="2"/>';
+
+  // Base-to-High uncertainty band
+  var basePts = relData.demand.base.map(function(d,i){ return xp(i)+','+yp(d.sfNeeded); }).join(' ');
+  var highRev = relData.demand.high.slice().reverse().map(function(d,i){ return xp(n-1-i)+','+yp(d.sfNeeded); }).join(' ');
+  svg += '<polygon points="'+basePts+' '+highRev+'" fill="#17E88F" opacity=".07"/>';
+
+  // Lease term vertical marker
+  var ltIdx = Math.min(state.leaseTerm, n-1);
+  if (ltIdx > 0 && ltIdx < n-1) {
+    var ltX = xp(ltIdx);
+    svg += '<line x1="'+ltX+'" y1="'+M.top+'" x2="'+ltX+'" y2="'+(M.top+ch)+'" stroke="rgba(23,232,143,.35)" stroke-width="1.5" stroke-dasharray="4,4"/>';
+    svg += '<text x="'+ltX+'" y="'+(M.top-6)+'" text-anchor="middle" font-size="8" fill="rgba(23,232,143,.5)">Lease term</text>';
+  }
+
+  // Proposed SF line
+  if (state.proposedSF > 0) {
+    var psy = yp(state.proposedSF);
+    svg += '<line x1="'+M.left+'" y1="'+psy+'" x2="'+(W-M.right)+'" y2="'+psy+'" stroke="#DBD99A" stroke-width="2" stroke-dasharray="9,5"/>';
+    svg += '<text x="'+(W-M.right+6)+'" y="'+(psy-4)+'" font-size="8" font-weight="700" fill="#DBD99A">Proposed</text>';
+    var psK = Math.round(state.proposedSF/1000*10)/10;
+    svg += '<text x="'+(W-M.right+6)+'" y="'+(psy+7)+'" font-size="8" fill="rgba(219,217,154,.6)">'+psK+'k SF</text>';
+  }
+
+  // Demand lines
+  ['base','mid','high'].forEach(function(key){
+    var pts = relData.demand[key].map(function(d,i){ return xp(i)+','+yp(d.sfNeeded); }).join(' ');
+    svg += '<polyline points="'+pts+'" fill="none" stroke="'+CHART_COLORS[key]+'" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>';
+    relData.years.forEach(function(yr,i){
+      svg += '<circle cx="'+xp(i)+'" cy="'+yp(relData.demand[key][i].sfNeeded)+'" r="4" fill="'+CHART_COLORS[key]+'"/>';
+    });
+    // Proposed SF exhaust marker
+    if (state.proposedSF > 0) {
+      var exIdx = -1;
+      relData.demand[key].forEach(function(d,i){ if(exIdx<0 && d.sfNeeded>state.proposedSF) exIdx=i; });
+      if (exIdx >= 0) {
+        svg += '<circle cx="'+xp(exIdx)+'" cy="'+yp(relData.demand[key][exIdx].sfNeeded)+'" r="7" fill="none" stroke="'+CHART_COLORS[key]+'" stroke-width="2" opacity=".8"/>';
+      }
+    }
+    var last = relData.demand[key][n-1];
+    svg += '<text x="'+(W-M.right+6)+'" y="'+(yp(last.sfNeeded)+4)+'" font-size="9" font-weight="700" fill="'+CHART_COLORS[key]+'">'+SC_LABELS[key]+'</text>';
+    var lK = Math.round(last.sfNeeded/1000*10)/10;
+    svg += '<text x="'+(W-M.right+6)+'" y="'+(yp(last.sfNeeded)+14)+'" font-size="8" fill="rgba(242,244,243,.38)">'+lK+'k SF</text>';
+  });
+
+  // X axis
+  relData.years.forEach(function(yr,i){
+    svg += '<line x1="'+xp(i)+'" y1="'+(M.top+ch)+'" x2="'+xp(i)+'" y2="'+(M.top+ch+5)+'" stroke="rgba(242,244,243,.15)" stroke-width="1"/>';
+    svg += '<text x="'+xp(i)+'" y="'+(H-M.bottom+17)+'" text-anchor="middle" font-size="10" fill="rgba(242,244,243,.45)">'+yr+'</text>';
+  });
+  svg += '<line x1="'+M.left+'" y1="'+M.top+'" x2="'+M.left+'" y2="'+(M.top+ch)+'" stroke="rgba(242,244,243,.1)" stroke-width="1"/>';
+  svg += '<line x1="'+M.left+'" y1="'+(M.top+ch)+'" x2="'+(W-M.right)+'" y2="'+(M.top+ch)+'" stroke="rgba(242,244,243,.1)" stroke-width="1"/>';
+  svg += '</svg>';
+
+  var legendExtras = state.proposedSF > 0 ? '<span style="color:#DBD99A">─ ─ Proposed ('+state.proposedSF.toLocaleString()+' SF)</span>' : '';
+  var leaseNote = (ltIdx > 0 && ltIdx < n-1) ? '<span style="color:rgba(23,232,143,.45)">┊ Lease term</span>' : '';
+
+  return '<div class="chart-card">'
+    + '<div class="chart-card-head">'
+    + '<div class="chart-title">SF Required Over Time · '+relData.years[0]+'–'+relData.years[n-1]+'</div>'
+    + '<div class="chart-legend">'
+    + legendExtras + leaseNote
+    + '<span style="color:'+CHART_COLORS.base+'" title="Conservative growth">— Base</span>'
+    + '<span style="color:'+CHART_COLORS.mid+'" title="Most likely growth">— Mid</span>'
+    + '<span style="color:'+CHART_COLORS.high+'" title="Stress-test / risk case">— High ⚠</span>'
+    + '</div></div>'
+    + svg
+    + '<div style="font-size:.65rem;color:rgba(242,244,243,.28);margin-top:.5rem">SF = peak attendance × '+state.targetDensity+' SF/seat · Shaded band = Base–High uncertainty range</div>'
+    + '</div>';
+}
+
+function buildRunwayAnalysis(relData) {
+  var n = relData.years.length;
+  var psf = state.proposedSF;
+  var density = state.targetDensity;
+  var seatsInProposed = density > 0 ? Math.floor(psf/density) : '—';
+
+  function runwayForKey(key) {
+    var idx = -1;
+    relData.demand[key].forEach(function(d,i){ if(idx<0 && d.sfNeeded>psf) idx=i; });
+    return idx >= 0 ? { year: relData.years[idx], idx: idx } : null;
+  }
+
+  var runs = { base: runwayForKey('base'), mid: runwayForKey('mid'), high: runwayForKey('high') };
+  var endYr = relData.years[n-1];
+
+  function runCard(label, run, col) {
+    var val = run ? run.year.toString() : '> '+endYr;
+    var runway = run ? (run.year - state.baseYear) : null;
+    var sub = run ? 'exhausted in '+(run.year-state.baseYear)+' yr' : 'sufficient through '+endYr;
+    return '<div style="flex:1;min-width:130px;background:'+col+'10;border:1px solid '+col+'33;border-radius:9px;padding:.85rem .95rem">'
+      + '<div style="font-size:.6rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:'+col+';margin-bottom:.35rem">'+label+'</div>'
+      + '<div style="font-family:\'DM Serif Display\',serif;font-size:1.6rem;color:'+col+';line-height:1;margin-bottom:.2rem">'+val+'</div>'
+      + '<div style="font-size:.65rem;color:rgba(242,244,243,.45)">'+sub+'</div>'
+      + '</div>';
+  }
+
+  var h = '<div class="chart-card">';
+  h += '<div class="chart-card-head">'
+     + '<div class="chart-title">Runway Analysis — '+psf.toLocaleString()+' SF Proposed</div>'
+     + (seatsInProposed !== '—' ? '<div style="font-size:.72rem;color:var(--text-muted)">≈ '+seatsInProposed.toLocaleString()+' seats at '+density+' SF/seat</div>' : '')
+     + '</div>';
+  h += '<div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:.75rem">';
+  h += runCard('Base Scenario', runs.base, SC_COLORS.base);
+  h += runCard('Mid Scenario',  runs.mid,  SC_COLORS.mid);
+  h += runCard('High Scenario', runs.high, SC_COLORS.high);
+  h += '</div>';
+
+  // Recommendation line
+  var worstRun = runs.high || runs.mid || runs.base;
+  if (worstRun) {
+    var urgency = (worstRun.year - state.baseYear) <= 3 ? '#538184' : (worstRun.year - state.baseYear) <= 6 ? '#80BBAD' : '#17E88F';
+    h += '<div style="padding:.65rem .9rem;background:'+urgency+'0d;border:1px solid '+urgency+'33;border-radius:7px;font-size:.78rem;line-height:1.65;color:rgba(242,244,243,.7)">'
+       + '<span style="font-weight:700;color:'+urgency+'">⚠ Under the high-growth scenario,</span> this space is exhausted by <strong style="color:'+urgency+'">'+worstRun.year+'</strong> — '+(worstRun.year-state.baseYear)+' years of runway. '
+       + 'Consider a renewal option or expansion clause in your lease to cover that risk.'
+       + '</div>';
+  } else {
+    h += '<div style="padding:.65rem .9rem;background:rgba(23,232,143,.06);border:1px solid rgba(23,232,143,.15);border-radius:7px;font-size:.78rem;color:rgba(242,244,243,.6)">'
+       + '✓ This space is sufficient through '+endYr+' under all three growth scenarios.'
+       + '</div>';
+  }
+  h += '</div>';
+  return h;
+}
+
+function buildRelocateYearTable(relData, hasDensity) {
+  var h = '<div class="chart-card"><div class="chart-title" style="margin-bottom:.85rem">Year-by-Year Projection</div>'
     + '<div class="tbl-wrap"><table class="data-tbl"><thead><tr>'
     + '<th>Year</th>'
-    + '<th style="color:var(--sc-base)">Base HC</th>'+(sfToday>0?'<th style="color:var(--sc-base)">Base SF</th>':'')
-    + '<th style="color:var(--sc-mid)">Mid HC</th>'+(sfToday>0?'<th style="color:var(--sc-mid)">Mid SF</th>':'')
-    + '<th style="color:var(--sc-high)">High HC</th>'+(sfToday>0?'<th style="color:var(--sc-high)">High SF</th>':'')
+    + '<th style="color:var(--sc-base)">Base HC</th>'+(hasDensity?'<th style="color:var(--sc-base)">Base SF</th>':'')
+    + '<th style="color:var(--sc-mid)">Mid HC</th>'+(hasDensity?'<th style="color:var(--sc-mid)">Mid SF</th>':'')
+    + '<th style="color:var(--sc-high)">High HC</th>'+(hasDensity?'<th style="color:var(--sc-high)">High SF</th>':'')
     + '</tr></thead><tbody>';
 
   relData.years.forEach(function(yr,i){
-    var b = relData.demand.base[i], m = relData.demand.mid[i], hh = relData.demand.high[i];
-    var isCurr = i===0;
-    h += '<tr'+(isCurr?' class="curr-row"':'')+'>'
-      + '<td style="font-weight:600">'+yr+(isCurr?' <span style="font-size:.65rem;color:var(--accent)">current</span>':'')+'</td>'
-      + '<td style="color:var(--sc-base)">'+b.hc.toLocaleString()+'</td>'+(sfToday>0?'<td style="color:var(--sc-base)">'+b.sfNeeded.toLocaleString()+'</td>':'')
-      + '<td style="color:var(--sc-mid)">'+m.hc.toLocaleString()+'</td>'+(sfToday>0?'<td style="color:var(--sc-mid)">'+m.sfNeeded.toLocaleString()+'</td>':'')
-      + '<td style="color:var(--sc-high)">'+hh.hc.toLocaleString()+'</td>'+(sfToday>0?'<td style="color:var(--sc-high)">'+hh.sfNeeded.toLocaleString()+'</td>':'')
+    var b=relData.demand.base[i], m=relData.demand.mid[i], hh=relData.demand.high[i];
+    var isCurr=i===0;
+    var ltMark = (i===Math.min(state.leaseTerm,relData.years.length-1) && !isCurr);
+    var rowStyle = ltMark ? ' style="background:rgba(23,232,143,.04)"' : '';
+    h += '<tr'+(isCurr?' class="curr-row"':'')+rowStyle+'>'
+      + '<td style="font-weight:600">'+yr
+        +(isCurr?' <span style="font-size:.65rem;color:var(--accent)">current</span>':'')
+        +(ltMark?' <span style="font-size:.63rem;color:var(--accent);opacity:.7">lease term</span>':'')
+      +'</td>'
+      + '<td style="color:var(--sc-base)">'+b.hc.toLocaleString()+'</td>'+(hasDensity?'<td style="color:var(--sc-base)">'+b.sfNeeded.toLocaleString()+'</td>':'')
+      + '<td style="color:var(--sc-mid)">'+m.hc.toLocaleString()+'</td>'+(hasDensity?'<td style="color:var(--sc-mid)">'+m.sfNeeded.toLocaleString()+'</td>':'')
+      + '<td style="color:var(--sc-high)">'+hh.hc.toLocaleString()+'</td>'+(hasDensity?'<td style="color:var(--sc-high)">'+hh.sfNeeded.toLocaleString()+'</td>':'')
       + '</tr>';
   });
-
   h += '</tbody></table></div></div>';
   return h;
 }
