@@ -2556,11 +2556,7 @@ function buildFlexDashboard(d) {
   h += buildFlexImpactBanner(d, cur, hasSeats, hasSF);
 
   // ── Policy Comparison Cards ───────────────────────────────────────────────
-  h += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;margin-bottom:1rem">';
-  h += '@media(max-width:760px){...}'; // handled via inline flex fallback below
-
-  // Re-render as responsive flex grid
-  h = h.replace('<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;margin-bottom:1rem">','<div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:1rem">');
+  h += '<div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:1rem">';
 
   d.policies.forEach(function(p) {
     var isOver   = p.util !== null && p.util > oversub;
