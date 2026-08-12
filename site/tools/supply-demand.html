@@ -386,12 +386,11 @@ select.text-input option{background:#001A14;color:#F2F4F3;}
         <div class="mode-card-q">"We're moving. How big should our next office be?"</div>
         <div class="mode-card-desc">Model SF requirements across growth scenarios. Get a clear search range sized to your lease term.</div>
       </div>
-      <div class="mode-card mode-card-soon">
+      <div class="mode-card" onclick="selectMode('flex')">
         <div class="mode-card-icon">🔄</div>
         <div class="mode-card-name">Flex Policy</div>
-        <div class="mode-card-q">"We're changing our attendance policy."</div>
-        <div class="mode-card-desc">Compare how different attendance policies shift your space needs.</div>
-        <div class="mode-card-soon-badge">Coming Soon</div>
+        <div class="mode-card-q">"What if we change our days-in-office policy?"</div>
+        <div class="mode-card-desc">Compare 2, 3, 4, and 5-day mandates side by side — see peak seat demand, utilization, and space delta for each.</div>
       </div>
       <div class="mode-card mode-card-soon">
         <div class="mode-card-icon">📅</div>
@@ -515,6 +514,56 @@ select.text-input option{background:#001A14;color:#F2F4F3;}
               <span class="unit">SF</span>
             </div>
             <div class="input-hint">Enter a specific space you're evaluating to see how long it lasts under each growth scenario.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Accordion: Flex Policy Options (flex mode only) -->
+      <div class="accordion" id="acc-flex-opts" style="display:none">
+        <div class="accordion-head" onclick="toggleAcc('flex-opts')">
+          <span>🔄 Policy Scenarios</span>
+          <span class="acc-arrow" id="arr-flex-opts">▲</span>
+        </div>
+        <div class="accordion-body" id="body-flex-opts">
+          <div class="input-group">
+            <label class="input-label">Current Policy</label>
+            <div class="att-presets">
+              <button class="att-preset" onclick="setFlexCurrentPolicy(2)" data-fp="2">2-Day</button>
+              <button class="att-preset active" onclick="setFlexCurrentPolicy(3)" data-fp="3">3-Day</button>
+              <button class="att-preset" onclick="setFlexCurrentPolicy(4)" data-fp="4">4-Day</button>
+              <button class="att-preset" onclick="setFlexCurrentPolicy(5)" data-fp="5">Full-Time</button>
+            </div>
+            <div class="input-hint">Mark your current mandate so comparisons are relative to today.</div>
+          </div>
+          <div class="input-group" style="margin-top:.65rem">
+            <label class="input-label">Peak Attendance Rates <span style="font-weight:400;opacity:.4;text-transform:none;letter-spacing:0">— adjust if needed</span></label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.55rem .9rem;margin-top:.45rem">
+              <div style="display:flex;align-items:center;gap:.5rem">
+                <span style="font-size:.75rem;color:var(--text-muted);min-width:58px">2-Day</span>
+                <input type="number" class="num-input-sm" id="flexRate2" min="1" max="100" value="40" style="width:56px"
+                  oninput="state.flexRates[2]=parseInt(this.value)||40;recompute()"/>
+                <span class="unit">%</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:.5rem">
+                <span style="font-size:.75rem;color:var(--text-muted);min-width:58px">3-Day</span>
+                <input type="number" class="num-input-sm" id="flexRate3" min="1" max="100" value="60" style="width:56px"
+                  oninput="state.flexRates[3]=parseInt(this.value)||60;recompute()"/>
+                <span class="unit">%</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:.5rem">
+                <span style="font-size:.75rem;color:var(--text-muted);min-width:58px">4-Day</span>
+                <input type="number" class="num-input-sm" id="flexRate4" min="1" max="100" value="78" style="width:56px"
+                  oninput="state.flexRates[4]=parseInt(this.value)||78;recompute()"/>
+                <span class="unit">%</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:.5rem">
+                <span style="font-size:.75rem;color:var(--text-muted);min-width:58px">Full-Time</span>
+                <input type="number" class="num-input-sm" id="flexRate5" min="1" max="100" value="95" style="width:56px"
+                  oninput="state.flexRates[5]=parseInt(this.value)||95;recompute()"/>
+                <span class="unit">%</span>
+              </div>
+            </div>
+            <div class="input-hint">Default rates account for day-of-week clustering. Adjust based on your badge/sensor data.</div>
           </div>
         </div>
       </div>
@@ -712,13 +761,24 @@ var state = {
   targetDensity: 0,
   assignedSeating: false,
   showVibrancy: true,
+  currentPolicy: 3,
+  flexRates: { 2: 40, 3: 60, 4: 78, 5: 95 },
 };
 
 var MODE_META = {
   grow:      { icon: '🌱', label: 'Growing',     desc: 'Track headcount growth against seat supply. Find the gap year and plan for expansion.' },
   rightsize: { icon: '✂️', label: 'Right-Sizing', desc: 'Calculate your minimum viable footprint, test exiting each location, find the optimal consolidation path.' },
   relocate:  { icon: '📍', label: 'Relocating',   desc: 'Size your next office for your headcount and lease term. Get a search range in SF across three growth scenarios.' },
+  flex:      { icon: '🔄', label: 'Flex Policy',  desc: 'Compare 2, 3, 4, and 5-day mandates side by side — see how your attendance policy shifts peak demand and utilization.' },
 };
+
+// Default peak attendance rate per days-in-office policy
+var FLEX_POLICIES = [
+  { days: 2, label: '2-Day',      subLabel: 'Two days/week',  defaultRate: 40 },
+  { days: 3, label: '3-Day',      subLabel: 'Three days/week', defaultRate: 60 },
+  { days: 4, label: '4-Day',      subLabel: 'Four days/week',  defaultRate: 78 },
+  { days: 5, label: 'Full-Time',  subLabel: 'Five days/week',  defaultRate: 95 },
+];
 var buildings = [];
 var _bid = 0, _fid = 0, _eid = 0;
 var expansionOptions = [];
@@ -749,8 +809,8 @@ function selectMode(mode) {
   }
   if (descEl && meta.desc) descEl.textContent = meta.desc;
 
-  // Hide space inventory for relocate mode
-  if (inv) inv.style.display = mode === 'relocate' ? 'none' : '';
+  // Hide space inventory for relocate and flex modes
+  if (inv) inv.style.display = (mode === 'relocate' || mode === 'flex') ? 'none' : '';
 
   // Show expansion options only in grow mode
   var xoEl = document.getElementById('acc-expansion-opts');
@@ -759,6 +819,10 @@ function selectMode(mode) {
   // Show relocate options only in relocate mode
   var relEl = document.getElementById('acc-relocate-opts');
   if (relEl) relEl.style.display = mode === 'relocate' ? '' : 'none';
+
+  // Show flex policy options only in flex mode
+  var flxEl = document.getElementById('acc-flex-opts');
+  if (flxEl) flxEl.style.display = mode === 'flex' ? '' : 'none';
 
   recompute();
 }
@@ -1248,6 +1312,19 @@ function recompute() {
     return;
   }
 
+  // ── Flex Policy path ──
+  if (state.mode === 'flex') {
+    if (!state.currentHC || state.currentHC <= 0) {
+      if (dash) dash.innerHTML = emptyForMode('Enter your current headcount in Headcount & Growth to model your policy scenarios.');
+      showExports(false);
+      return;
+    }
+    var flxData = computeFlex();
+    if (dash) dash.innerHTML = buildFlexDashboard(flxData);
+    showExports(true);
+    return;
+  }
+
   // ── Grow / Right-Size path ──
   var hasData = buildings.length>0
     && buildings.some(function(b){return resolveSeats(b)>0;})
@@ -1262,7 +1339,7 @@ function recompute() {
         + '<span style="font-size:1.1rem">'+(done?'✅':'⬜')+'</span>'
         + '<span style="'+(done?'':'opacity:.7')+'">'+text+'</span></div>';
     }
-    var icon = state.mode === 'rightsize' ? '✂️' : state.mode === 'grow' ? '🌱' : '⚖️';
+    var icon = state.mode === 'rightsize' ? '✂️' : state.mode === 'grow' ? '🌱' : state.mode === 'flex' ? '🔄' : '⚖️';
     if (dash) dash.innerHTML = '<div class="empty-state">'
       + '<div class="empty-icon">'+icon+'</div>'
       + '<div class="empty-title">Three steps to your analysis</div>'
@@ -2424,6 +2501,280 @@ function buildRelocateYearTable(relData, hasDensity) {
       + '</tr>';
   });
   h += '</tbody></table></div></div>';
+  return h;
+}
+
+// ─── FLEX POLICY MODE ────────────────────────────────────────────────────────
+function setFlexCurrentPolicy(days) {
+  state.currentPolicy = days;
+  document.querySelectorAll('.att-preset[data-fp]').forEach(function(btn) {
+    btn.classList.toggle('active', parseInt(btn.getAttribute('data-fp')) === days);
+  });
+  recompute();
+}
+
+function computeFlex() {
+  var hc       = state.currentHC || 0;
+  var totalSeats = 0;
+  buildings.forEach(function(b) { totalSeats += resolveSeats(b); });
+  var totalSF  = state.totalRSF || 0;
+  var density  = state.targetDensity || 0;
+
+  var policies = FLEX_POLICIES.map(function(p) {
+    var rate     = (state.flexRates[p.days] || p.defaultRate) / 100;
+    var peak     = Math.round(hc * rate);
+    var util     = totalSeats > 0 ? Math.round(peak / totalSeats * 100) : null;
+    var sfNeeded = density > 0 ? Math.round(peak * density) : null;
+    var sfDelta  = (sfNeeded !== null && totalSF > 0) ? sfNeeded - totalSF : null;
+    var seatDelta = totalSeats > 0 ? peak - totalSeats : null;
+    return {
+      days:      p.days,
+      label:     p.label,
+      subLabel:  p.subLabel,
+      rate:      Math.round(rate * 100),
+      peak:      peak,
+      util:      util,
+      sfNeeded:  sfNeeded,
+      sfDelta:   sfDelta,
+      seatDelta: seatDelta,
+      isCurrent: p.days === state.currentPolicy,
+    };
+  });
+
+  return { policies: policies, totalSeats: totalSeats, totalSF: totalSF, density: density };
+}
+
+function buildFlexDashboard(d) {
+  var h = '';
+  var hasSF      = d.totalSF > 0 && d.density > 0;
+  var hasSeats   = d.totalSeats > 0;
+  var cur        = d.policies.find(function(p){ return p.isCurrent; }) || d.policies[1];
+  var vibrancy   = state.vibrancyThreshold || 67;
+  var oversub    = state.oversubscribedThreshold || 80;
+
+  // ── Policy Impact Banner ──────────────────────────────────────────────────
+  h += buildFlexImpactBanner(d, cur, hasSeats, hasSF);
+
+  // ── Policy Comparison Cards ───────────────────────────────────────────────
+  h += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;margin-bottom:1rem">';
+  h += '@media(max-width:760px){...}'; // handled via inline flex fallback below
+
+  // Re-render as responsive flex grid
+  h = h.replace('<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;margin-bottom:1rem">','<div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:1rem">');
+
+  d.policies.forEach(function(p) {
+    var isOver   = p.util !== null && p.util > oversub;
+    var isLow    = p.util !== null && p.util < vibrancy;
+    var borderCol = p.isCurrent ? 'rgba(23,232,143,.5)' : isOver ? 'rgba(255,107,107,.3)' : isLow ? 'rgba(83,129,132,.3)' : 'rgba(255,255,255,.1)';
+    var bgCol     = p.isCurrent ? 'rgba(23,232,143,.06)' : 'rgba(255,255,255,.025)';
+    var statusIcon = p.util === null ? '' : isOver ? '🔴' : isLow ? '🔵' : '🟢';
+
+    h += '<div style="flex:1;min-width:160px;background:'+bgCol+';border:1.5px solid '+borderCol+';border-radius:12px;padding:1rem 1.05rem;position:relative">';
+    if (p.isCurrent) h += '<div style="position:absolute;top:.6rem;right:.7rem;font-size:.6rem;font-weight:700;letter-spacing:.08em;background:rgba(23,232,143,.15);color:var(--accent);border:1px solid rgba(23,232,143,.3);border-radius:4px;padding:.15rem .45rem">CURRENT</div>';
+
+    h += '<div style="font-size:.65rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--text-muted);margin-bottom:.2rem">'+p.label+'</div>';
+    h += '<div style="font-size:.72rem;color:rgba(242,244,243,.4);margin-bottom:.7rem">'+p.subLabel+'</div>';
+
+    // Attendance rate pill
+    h += '<div style="font-size:1.5rem;font-weight:700;color:var(--text);line-height:1;margin-bottom:.1rem">'+p.rate+'%</div>';
+    h += '<div style="font-size:.65rem;color:rgba(242,244,243,.35);margin-bottom:.85rem">peak attendance</div>';
+
+    // Peak seats
+    h += '<div style="font-size:.72rem;color:rgba(242,244,243,.5);margin-bottom:.1rem">Peak seats needed</div>';
+    h += '<div style="font-size:1.1rem;font-weight:600;color:var(--text);margin-bottom:.75rem">'+p.peak.toLocaleString()+'</div>';
+
+    if (hasSeats) {
+      // Utilization bar
+      var utilPct = Math.min(p.util, 130);
+      var barCol  = isOver ? '#ff6b6b' : isLow ? '#538184' : '#17E88F';
+      h += '<div style="font-size:.65rem;color:rgba(242,244,243,.4);margin-bottom:.3rem">Utilization '+statusIcon+'</div>';
+      h += '<div style="background:rgba(255,255,255,.07);border-radius:4px;height:6px;margin-bottom:.3rem;overflow:hidden">'
+         + '<div style="width:'+utilPct+'%;background:'+barCol+';height:100%;border-radius:4px;transition:width .4s"></div></div>';
+      h += '<div style="font-size:.85rem;font-weight:700;color:'+(isOver?'#ff6b6b':isLow?'#538184':'#17E88F')+'">'+p.util+'%</div>';
+      if (p.seatDelta !== null) {
+        var deltaSign = p.seatDelta > 0 ? '+' : '';
+        h += '<div style="font-size:.65rem;color:rgba(242,244,243,.35);margin-top:.2rem">'
+           + deltaSign+p.seatDelta.toLocaleString()+' seats vs. supply</div>';
+      }
+    }
+
+    if (hasSF && p.sfNeeded !== null) {
+      h += '<div style="border-top:1px solid rgba(255,255,255,.07);margin-top:.7rem;padding-top:.7rem">';
+      h += '<div style="font-size:.65rem;color:rgba(242,244,243,.35);margin-bottom:.15rem">SF needed</div>';
+      h += '<div style="font-size:.85rem;font-weight:600;color:var(--text)">'+p.sfNeeded.toLocaleString()+' SF</div>';
+      if (p.sfDelta !== null) {
+        var sfSign = p.sfDelta > 0 ? '+' : '';
+        var sfCol  = p.sfDelta > 0 ? '#ff6b6b' : '#17E88F';
+        h += '<div style="font-size:.65rem;color:'+sfCol+';margin-top:.15rem">'+sfSign+p.sfDelta.toLocaleString()+' SF vs. current</div>';
+      }
+      h += '</div>';
+    }
+
+    h += '</div>';
+  });
+  h += '</div>';
+
+  // ── Comparison Bar Chart ──────────────────────────────────────────────────
+  h += buildFlexBarChart(d, hasSeats, vibrancy, oversub);
+
+  // ── Comparison Table ──────────────────────────────────────────────────────
+  h += buildFlexTable(d, hasSeats, hasSF, vibrancy, oversub);
+
+  return h;
+}
+
+function buildFlexImpactBanner(d, cur, hasSeats, hasSF) {
+  var hc = state.currentHC;
+  // Find a "proposed" — the policy adjacent to current that changes things most
+  var others = d.policies.filter(function(p){ return !p.isCurrent; });
+  // Pick the policy one step more restrictive (higher days) if exists, else one step less
+  var proposed = d.policies.find(function(p){ return p.days === cur.days + 1; })
+              || d.policies.find(function(p){ return p.days === cur.days - 1; })
+              || others[0];
+
+  var seatChange = proposed.peak - cur.peak;
+  var seatSign   = seatChange >= 0 ? '+' : '';
+  var direction  = seatChange >= 0 ? 'increase' : 'decrease';
+  var arrow      = seatChange >= 0 ? '↑' : '↓';
+  var col        = seatChange >= 0 ? '#ff6b6b' : '#17E88F';
+
+  var sfLine = '';
+  if (hasSF && proposed.sfDelta !== null && cur.sfDelta !== null) {
+    var sfShift = proposed.sfNeeded - cur.sfNeeded;
+    var sfSign2 = sfShift >= 0 ? '+' : '';
+    sfLine = ' That\'s a <strong style="color:'+col+'">'+sfSign2+sfShift.toLocaleString()+' SF</strong> shift in space requirement.';
+  }
+
+  var utilLine = '';
+  if (hasSeats && proposed.util !== null && cur.util !== null) {
+    utilLine = ' Utilization moves from <strong>'+cur.util+'%</strong> to <strong style="color:'+(proposed.util > (state.oversubscribedThreshold||80)?'#ff6b6b':proposed.util < (state.vibrancyThreshold||67)?'#538184':'#17E88F')+'">'+proposed.util+'%</strong>.';
+  }
+
+  return '<div style="background:rgba(23,232,143,.05);border:1px solid rgba(23,232,143,.2);border-radius:12px;padding:1rem 1.25rem;margin-bottom:1rem;display:flex;align-items:flex-start;gap:.85rem">'
+    + '<div style="font-size:1.75rem;line-height:1;margin-top:.1rem">🔄</div>'
+    + '<div style="flex:1">'
+    + '<div style="font-size:.82rem;font-weight:700;color:var(--text);margin-bottom:.35rem">Policy Impact: '+cur.label+' → '+proposed.label+'</div>'
+    + '<div style="font-size:.78rem;color:rgba(242,244,243,.65);line-height:1.7">'
+    + 'Moving from a <strong>'+cur.label+' ('+cur.rate+'%)</strong> to a <strong>'+proposed.label+' ('+proposed.rate+'%)</strong> policy would '
+    + direction+' peak seat demand by <strong style="color:'+col+'">'+seatSign+seatChange.toLocaleString()+' seats</strong> '
+    + arrow+' ('+Math.abs(Math.round(seatChange/Math.max(cur.peak,1)*100))+'% change).'
+    + sfLine + utilLine
+    + '</div>'
+    + '</div>'
+    + '</div>';
+}
+
+function buildFlexBarChart(d, hasSeats, vibrancy, oversub) {
+  if (!hasSeats) return '';
+  var W=780, H=220, M={top:20,right:20,bottom:40,left:65};
+  var cw=W-M.left-M.right, ch=H-M.top-M.bottom;
+
+  var peaks = d.policies.map(function(p){ return p.peak; });
+  var allVals = peaks.concat(d.totalSeats > 0 ? [d.totalSeats] : []);
+  var rawMax = Math.max.apply(null, allVals);
+  var yMax = Math.ceil(rawMax*1.25/100)*100 || 100;
+
+  var barW  = Math.floor(cw / d.policies.length * 0.55);
+  var gap   = cw / d.policies.length;
+
+  function xCenter(i){ return M.left + gap*i + gap/2; }
+  function yp(v){ return M.top + ch - (v/yMax)*ch; }
+
+  var svg = '<svg viewBox="0 0 '+W+' '+H+'" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="DM Sans,Arial,sans-serif" style="display:block">';
+
+  // Grid lines
+  [0,0.25,0.5,0.75,1].forEach(function(f){
+    var gv = f*yMax, gy = yp(gv);
+    svg += '<line x1="'+M.left+'" y1="'+gy+'" x2="'+(W-M.right)+'" y2="'+gy+'" stroke="rgba(255,255,255,.06)" stroke-width="1"/>';
+    var lbl = gv >= 1000 ? (gv/1000).toFixed(1)+'k' : Math.round(gv).toString();
+    svg += '<text x="'+(M.left-7)+'" y="'+(gy+4)+'" text-anchor="end" font-size="9" fill="rgba(242,244,243,.3)">'+lbl+'</text>';
+  });
+
+  // Supply line
+  var sy = yp(d.totalSeats);
+  svg += '<line x1="'+M.left+'" y1="'+sy+'" x2="'+(W-M.right)+'" y2="'+sy+'" stroke="rgba(242,244,243,.4)" stroke-width="1.5" stroke-dasharray="6,4"/>';
+  svg += '<text x="'+(W-M.right+6)+'" y="'+(sy+4)+'" font-size="8" fill="rgba(242,244,243,.4)">Supply</text>';
+  svg += '<text x="'+(W-M.right+6)+'" y="'+(sy+14)+'" font-size="8" fill="rgba(242,244,243,.25)">'+d.totalSeats.toLocaleString()+'</text>';
+
+  // Vibrancy threshold line
+  var vy = yp(Math.round(d.totalSeats * vibrancy/100));
+  svg += '<line x1="'+M.left+'" y1="'+vy+'" x2="'+(W-M.right)+'" y2="'+vy+'" stroke="rgba(83,129,132,.4)" stroke-width="1" stroke-dasharray="3,3"/>';
+
+  // Bars
+  d.policies.forEach(function(p, i) {
+    var cx  = xCenter(i);
+    var bx  = cx - barW/2;
+    var bh  = Math.max(2, (p.peak/yMax)*ch);
+    var by  = M.top + ch - bh;
+    var isOver = p.util !== null && p.util > oversub;
+    var isLow  = p.util !== null && p.util < vibrancy;
+    var barCol = p.isCurrent ? '#17E88F' : isOver ? '#ff6b6b' : isLow ? '#538184' : '#80BBAD';
+    var opacity = p.isCurrent ? '1' : '0.65';
+
+    svg += '<rect x="'+bx+'" y="'+by+'" width="'+barW+'" height="'+bh+'" fill="'+barCol+'" opacity="'+opacity+'" rx="4"/>';
+    svg += '<text x="'+cx+'" y="'+(by-5)+'" text-anchor="middle" font-size="9" font-weight="700" fill="'+barCol+'">'+p.peak.toLocaleString()+'</text>';
+
+    // X label
+    svg += '<text x="'+cx+'" y="'+(H-M.bottom+14)+'" text-anchor="middle" font-size="10" fill="'+(p.isCurrent?'var(--accent)':'rgba(242,244,243,.5)')+'">'+p.label+'</text>';
+    svg += '<text x="'+cx+'" y="'+(H-M.bottom+25)+'" text-anchor="middle" font-size="8" fill="rgba(242,244,243,.3)">'+p.rate+'%</text>';
+
+    // Current policy marker
+    if (p.isCurrent) {
+      svg += '<text x="'+cx+'" y="'+(H-M.bottom+36)+'" text-anchor="middle" font-size="7" font-weight="700" fill="var(--accent)">▲ NOW</text>';
+    }
+  });
+
+  svg += '</svg>';
+
+  return '<div class="chart-card">'
+    + '<div class="chart-card-head">'
+    + '<div class="chart-title">Peak Seat Demand by Policy</div>'
+    + '<div class="chart-legend">'
+    + '<span style="color:rgba(242,244,243,.4)">─ ─ Current seat supply ('+d.totalSeats.toLocaleString()+')</span>'
+    + '</div></div>'
+    + svg
+    + '</div>';
+}
+
+function buildFlexTable(d, hasSeats, hasSF, vibrancy, oversub) {
+  var h = '<div class="chart-card"><div class="chart-title" style="margin-bottom:.85rem">Policy Comparison Table</div>'
+    + '<div class="tbl-wrap"><table class="data-tbl"><thead><tr>'
+    + '<th>Policy</th><th>Days/Wk</th><th>Peak Rate</th><th>Peak Seats</th>'
+    + (hasSeats ? '<th>Utilization</th><th>Seat Delta</th>' : '')
+    + (hasSF    ? '<th>SF Needed</th><th>SF Delta</th>' : '')
+    + '</tr></thead><tbody>';
+
+  d.policies.forEach(function(p) {
+    var isOver = hasSeats && p.util !== null && p.util > oversub;
+    var isLow  = hasSeats && p.util !== null && p.util < vibrancy;
+    var rowCls = p.isCurrent ? ' class="curr-row"' : '';
+    var statusIcon = !hasSeats || p.util === null ? '' : isOver ? ' 🔴' : isLow ? ' 🔵' : ' 🟢';
+    h += '<tr'+rowCls+'>'
+      + '<td style="font-weight:600'+(p.isCurrent?';color:var(--accent)':'')+'">'+p.label+(p.isCurrent?' <span style="font-size:.6rem;opacity:.7">current</span>':'')+'</td>'
+      + '<td>'+p.days+' days</td>'
+      + '<td>'+p.rate+'%</td>'
+      + '<td>'+p.peak.toLocaleString()+'</td>';
+
+    if (hasSeats) {
+      var utilCol = isOver ? '#ff6b6b' : isLow ? '#538184' : '#17E88F';
+      h += '<td style="color:'+utilCol+';font-weight:600">'+(p.util !== null ? p.util+'%'+statusIcon : '—')+'</td>';
+      var sd = p.seatDelta; var sdSign = sd >= 0 ? '+' : '';
+      h += '<td style="color:'+(sd>0?'#ff6b6b':sd<0?'#17E88F':'rgba(242,244,243,.5)')+'">'+(sd !== null ? sdSign+sd.toLocaleString() : '—')+'</td>';
+    }
+    if (hasSF) {
+      h += '<td>'+(p.sfNeeded !== null ? p.sfNeeded.toLocaleString()+' SF' : '—')+'</td>';
+      var sfd = p.sfDelta; var sfdSign = sfd >= 0 ? '+' : '';
+      h += '<td style="color:'+(sfd>0?'#ff6b6b':sfd<0?'#17E88F':'rgba(242,244,243,.5)')+'">'+(sfd !== null ? sfdSign+sfd.toLocaleString()+' SF' : '—')+'</td>';
+    }
+
+    h += '</tr>';
+  });
+
+  h += '</tbody></table></div>'
+    + '<div style="font-size:.65rem;color:rgba(242,244,243,.28);margin-top:.5rem">'
+    + '🔴 Over-subscribed (>'+oversub+'% util) · 🔵 Under-vibrancy (<'+vibrancy+'% util) · 🟢 Optimal range'
+    + (hasSF ? ' · SF delta vs. current '+d.totalSF.toLocaleString()+' SF' : '')
+    + '</div></div>';
   return h;
 }
 
