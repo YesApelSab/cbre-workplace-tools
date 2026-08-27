@@ -536,6 +536,22 @@ select.text-input option{background:#001A14;color:#F2F4F3;}
             <div class="input-hint">Mark your current mandate so comparisons are relative to today.</div>
           </div>
           <div class="input-group" style="margin-top:.65rem">
+            <label class="input-label">Seating Model</label>
+            <div class="att-presets">
+              <button class="att-preset active" onclick="setFlexSeatingModel('shared')" data-sm="shared">Shared</button>
+              <button class="att-preset" onclick="setFlexSeatingModel('assigned')" data-sm="assigned">Assigned 1:1</button>
+              <button class="att-preset" onclick="setFlexSeatingModel('ratio')" data-sm="ratio">Custom Ratio</button>
+            </div>
+            <div id="flex-ratio-row" style="display:none;align-items:center;gap:.5rem;margin-top:.5rem">
+              <span style="font-size:.75rem;color:var(--text-muted)">Sharing ratio</span>
+              <input type="number" class="num-input-sm" id="flexSharingRatio" min="1" max="5" step="0.1" value="1.3" style="width:60px"
+                oninput="state.flexSharingRatio=parseFloat(this.value)||1.3;recompute()"/>
+              <span class="unit">: 1</span>
+              <span style="font-size:.7rem;color:rgba(242,244,243,.35)">(employees per desk)</span>
+            </div>
+            <div class="input-hint" id="flex-seating-hint">Seats needed = peak attendance only. Desks are shared across the week.</div>
+          </div>
+          <div class="input-group" style="margin-top:.65rem">
             <label class="input-label">Peak Attendance Rates <span style="font-weight:400;opacity:.4;text-transform:none;letter-spacing:0">— adjust if needed</span></label>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:.55rem .9rem;margin-top:.45rem">
               <div style="display:flex;align-items:center;gap:.5rem">
@@ -763,6 +779,8 @@ var state = {
   showVibrancy: true,
   currentPolicy: 3,
   flexRates: { 2: 40, 3: 60, 4: 78, 5: 95 },
+  flexSeatingModel: 'shared',
+  flexSharingRatio: 1.3,
 };
 
 var MODE_META = {
@@ -2513,44 +2531,89 @@ function setFlexCurrentPolicy(days) {
   recompute();
 }
 
+function setFlexSeatingModel(model) {
+  state.flexSeatingModel = model;
+  document.querySelectorAll('.att-preset[data-sm]').forEach(function(btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-sm') === model);
+  });
+  var ratioRow = document.getElementById('flex-ratio-row');
+  var hint     = document.getElementById('flex-seating-hint');
+  if (ratioRow) ratioRow.style.display = model === 'ratio' ? 'flex' : 'none';
+  var hints = {
+    shared:   'Seats needed = peak attendance only. Desks are shared across the week.',
+    assigned: 'Every employee has a dedicated desk (seats needed = HC). Policy affects occupancy, not seat count.',
+    ratio:    'Seats provisioned = HC ÷ sharing ratio. A 1.3:1 ratio means 1.3 employees share each desk.',
+  };
+  if (hint) hint.textContent = hints[model] || '';
+  recompute();
+}
+
 function computeFlex() {
-  var hc       = state.currentHC || 0;
+  var hc         = state.currentHC || 0;
   var totalSeats = 0;
   buildings.forEach(function(b) { totalSeats += resolveSeats(b); });
   var totalSF  = state.totalRSF || 0;
   var density  = state.targetDensity || 0;
+  var model    = state.flexSeatingModel || 'shared';
+  var ratio    = state.flexSharingRatio || 1.3;
+
+  // Seats provisioned under ratio/assigned models is fixed regardless of policy
+  var provisionedSeats = model === 'assigned' ? hc
+                       : model === 'ratio'    ? Math.round(hc / ratio)
+                       : null; // shared: provisioned = peak (varies per policy)
 
   var policies = FLEX_POLICIES.map(function(p) {
-    var rate     = (state.flexRates[p.days] || p.defaultRate) / 100;
-    var peak     = Math.round(hc * rate);
-    var util     = totalSeats > 0 ? Math.round(peak / totalSeats * 100) : null;
-    var sfNeeded = density > 0 ? Math.round(peak * density) : null;
+    var attRate  = (state.flexRates[p.days] || p.defaultRate) / 100;
+    var peak     = Math.round(hc * attRate);
+
+    var seatsNeeded, util, seatDelta;
+
+    if (model === 'assigned') {
+      seatsNeeded = hc;                                                        // everyone has a desk
+      util        = totalSeats > 0 ? Math.round(peak / totalSeats * 100) : null; // physical occupancy at peak
+      seatDelta   = totalSeats > 0 ? hc - totalSeats : null;                  // shortfall/surplus of desks
+    } else if (model === 'ratio') {
+      seatsNeeded = provisionedSeats;                                          // HC ÷ ratio
+      util        = seatsNeeded > 0 ? Math.round(peak / seatsNeeded * 100) : null;
+      seatDelta   = totalSeats > 0 ? seatsNeeded - totalSeats : null;
+    } else {
+      // shared (default)
+      seatsNeeded = peak;
+      util        = totalSeats > 0 ? Math.round(peak / totalSeats * 100) : null;
+      seatDelta   = totalSeats > 0 ? peak - totalSeats : null;
+    }
+
+    var sfNeeded = density > 0 ? Math.round(seatsNeeded * density) : null;
     var sfDelta  = (sfNeeded !== null && totalSF > 0) ? sfNeeded - totalSF : null;
-    var seatDelta = totalSeats > 0 ? peak - totalSeats : null;
+
     return {
-      days:      p.days,
-      label:     p.label,
-      subLabel:  p.subLabel,
-      rate:      Math.round(rate * 100),
-      peak:      peak,
-      util:      util,
-      sfNeeded:  sfNeeded,
-      sfDelta:   sfDelta,
-      seatDelta: seatDelta,
-      isCurrent: p.days === state.currentPolicy,
+      days:         p.days,
+      label:        p.label,
+      subLabel:     p.subLabel,
+      rate:         Math.round(attRate * 100),
+      peak:         peak,
+      seatsNeeded:  seatsNeeded,
+      util:         util,
+      sfNeeded:     sfNeeded,
+      sfDelta:      sfDelta,
+      seatDelta:    seatDelta,
+      isCurrent:    p.days === state.currentPolicy,
     };
   });
 
-  return { policies: policies, totalSeats: totalSeats, totalSF: totalSF, density: density };
+  return { policies: policies, totalSeats: totalSeats, totalSF: totalSF, density: density, model: model, ratio: ratio, provisionedSeats: provisionedSeats };
 }
 
 function buildFlexDashboard(d) {
   var h = '';
-  var hasSF      = d.totalSF > 0 && d.density > 0;
-  var hasSeats   = d.totalSeats > 0;
-  var cur        = d.policies.find(function(p){ return p.isCurrent; }) || d.policies[1];
-  var vibrancy   = state.vibrancyThreshold || 67;
-  var oversub    = state.oversubscribedThreshold || 80;
+  var hasSF    = d.totalSF > 0 && d.density > 0;
+  var hasSeats = d.totalSeats > 0;
+  var cur      = d.policies.find(function(p){ return p.isCurrent; }) || d.policies[1];
+  var vibrancy = state.vibrancyThreshold || 67;
+  var oversub  = state.oversubscribedThreshold || 80;
+  var seatsLabel = d.model === 'assigned' ? 'Desks allocated (1:1)'
+                 : d.model === 'ratio'    ? 'Desks provisioned ('+d.ratio+':1)'
+                 : 'Peak seats needed';
 
   // ── Policy Impact Banner ──────────────────────────────────────────────────
   h += buildFlexImpactBanner(d, cur, hasSeats, hasSF);
@@ -2575,22 +2638,29 @@ function buildFlexDashboard(d) {
     h += '<div style="font-size:1.5rem;font-weight:700;color:var(--text);line-height:1;margin-bottom:.1rem">'+p.rate+'%</div>';
     h += '<div style="font-size:.65rem;color:rgba(242,244,243,.35);margin-bottom:.85rem">peak attendance</div>';
 
-    // Peak seats
-    h += '<div style="font-size:.72rem;color:rgba(242,244,243,.5);margin-bottom:.1rem">Peak seats needed</div>';
-    h += '<div style="font-size:1.1rem;font-weight:600;color:var(--text);margin-bottom:.75rem">'+p.peak.toLocaleString()+'</div>';
+    // Seats needed (label and value depend on seating model)
+    h += '<div style="font-size:.72rem;color:rgba(242,244,243,.5);margin-bottom:.1rem">'+seatsLabel+'</div>';
+    h += '<div style="font-size:1.1rem;font-weight:600;color:var(--text);margin-bottom:.15rem">'+p.seatsNeeded.toLocaleString()+'</div>';
+    if (d.model !== 'shared') {
+      h += '<div style="font-size:.65rem;color:rgba(242,244,243,.3);margin-bottom:.6rem">'+p.peak.toLocaleString()+' peak occupants</div>';
+    } else {
+      h += '<div style="margin-bottom:.6rem"></div>';
+    }
 
     if (hasSeats) {
       // Utilization bar
-      var utilPct = Math.min(p.util, 130);
-      var barCol  = isOver ? '#ff6b6b' : isLow ? '#538184' : '#17E88F';
-      h += '<div style="font-size:.65rem;color:rgba(242,244,243,.4);margin-bottom:.3rem">Utilization '+statusIcon+'</div>';
+      var utilPct  = Math.min(p.util, 130);
+      var barCol   = isOver ? '#ff6b6b' : isLow ? '#538184' : '#17E88F';
+      var utilLabel = d.model === 'assigned' ? 'Peak occupancy '+statusIcon : 'Utilization '+statusIcon;
+      h += '<div style="font-size:.65rem;color:rgba(242,244,243,.4);margin-bottom:.3rem">'+utilLabel+'</div>';
       h += '<div style="background:rgba(255,255,255,.07);border-radius:4px;height:6px;margin-bottom:.3rem;overflow:hidden">'
          + '<div style="width:'+utilPct+'%;background:'+barCol+';height:100%;border-radius:4px;transition:width .4s"></div></div>';
       h += '<div style="font-size:.85rem;font-weight:700;color:'+(isOver?'#ff6b6b':isLow?'#538184':'#17E88F')+'">'+p.util+'%</div>';
       if (p.seatDelta !== null) {
-        var deltaSign = p.seatDelta > 0 ? '+' : '';
+        var deltaSign  = p.seatDelta > 0 ? '+' : '';
+        var deltaLabel = d.model === 'assigned' ? ' desk shortfall vs. supply' : ' seats vs. supply';
         h += '<div style="font-size:.65rem;color:rgba(242,244,243,.35);margin-top:.2rem">'
-           + deltaSign+p.seatDelta.toLocaleString()+' seats vs. supply</div>';
+           + deltaSign+p.seatDelta.toLocaleString()+deltaLabel+'</div>';
       }
     }
 
@@ -2620,42 +2690,63 @@ function buildFlexDashboard(d) {
 }
 
 function buildFlexImpactBanner(d, cur, hasSeats, hasSF) {
-  var hc = state.currentHC;
-  // Find a "proposed" — the policy adjacent to current that changes things most
-  var others = d.policies.filter(function(p){ return !p.isCurrent; });
-  // Pick the policy one step more restrictive (higher days) if exists, else one step less
   var proposed = d.policies.find(function(p){ return p.days === cur.days + 1; })
               || d.policies.find(function(p){ return p.days === cur.days - 1; })
-              || others[0];
+              || d.policies.filter(function(p){ return !p.isCurrent; })[0];
 
-  var seatChange = proposed.peak - cur.peak;
-  var seatSign   = seatChange >= 0 ? '+' : '';
-  var direction  = seatChange >= 0 ? 'increase' : 'decrease';
-  var arrow      = seatChange >= 0 ? '↑' : '↓';
-  var col        = seatChange >= 0 ? '#ff6b6b' : '#17E88F';
+  var col = '#17E88F';
+  var body = '';
 
-  var sfLine = '';
-  if (hasSF && proposed.sfDelta !== null && cur.sfDelta !== null) {
-    var sfShift = proposed.sfNeeded - cur.sfNeeded;
-    var sfSign2 = sfShift >= 0 ? '+' : '';
-    sfLine = ' That\'s a <strong style="color:'+col+'">'+sfSign2+sfShift.toLocaleString()+' SF</strong> shift in space requirement.';
-  }
-
-  var utilLine = '';
-  if (hasSeats && proposed.util !== null && cur.util !== null) {
-    utilLine = ' Utilization moves from <strong>'+cur.util+'%</strong> to <strong style="color:'+(proposed.util > (state.oversubscribedThreshold||80)?'#ff6b6b':proposed.util < (state.vibrancyThreshold||67)?'#538184':'#17E88F')+'">'+proposed.util+'%</strong>.';
+  if (d.model === 'assigned') {
+    // In assigned mode, desk count never changes — policy only shifts occupancy
+    var occChange = proposed.util !== null && cur.util !== null ? proposed.util - cur.util : null;
+    var occDir    = occChange >= 0 ? 'raises' : 'lowers';
+    var occCol    = occChange >= 0 ? '#ff6b6b' : '#17E88F';
+    col = occCol;
+    body = 'In a 1:1 assigned model, changing policy <strong>doesn\'t change the desk count</strong> — '
+      + 'everyone still needs a dedicated seat. But moving from <strong>'+cur.label+' ('+cur.rate+'%)</strong> to '
+      + '<strong>'+proposed.label+' ('+proposed.rate+'%)</strong> '
+      + occDir+' peak occupancy from <strong>'+cur.util+'%</strong> to '
+      + '<strong style="color:'+occCol+'">'+proposed.util+'%</strong>. '
+      + 'Fewer people in means more empty assigned desks — wasted space with no seat savings.';
+  } else if (d.model === 'ratio') {
+    // Ratio model: desk count also fixed, but show how peak load vs. provision changes
+    var loadChange = proposed.util !== null && cur.util !== null ? proposed.util - cur.util : null;
+    var loadDir    = loadChange >= 0 ? 'pushes utilization up' : 'eases utilization down';
+    col = loadChange >= 0 ? '#ff6b6b' : '#17E88F';
+    body = 'At a <strong>'+d.ratio+':1 sharing ratio</strong>, '+Math.round(d.provisionedSeats).toLocaleString()+' desks serve '
+      + state.currentHC.toLocaleString()+' employees. Moving from <strong>'+cur.label+'</strong> to <strong>'+proposed.label+'</strong> '
+      + loadDir+' from <strong>'+cur.util+'%</strong> to <strong style="color:'+col+'">'+proposed.util+'%</strong>. '
+      + 'A tighter mandate can push utilization past the over-subscribed threshold — watch the red zone.';
+  } else {
+    // Shared: seat demand shifts with attendance
+    var seatChange = proposed.peak - cur.peak;
+    var seatSign   = seatChange >= 0 ? '+' : '';
+    var direction  = seatChange >= 0 ? 'increase' : 'decrease';
+    var arrow      = seatChange >= 0 ? '↑' : '↓';
+    col = seatChange >= 0 ? '#ff6b6b' : '#17E88F';
+    var sfLine = '';
+    if (hasSF && proposed.sfNeeded !== null && cur.sfNeeded !== null) {
+      var sfShift = proposed.sfNeeded - cur.sfNeeded;
+      var sfSign2 = sfShift >= 0 ? '+' : '';
+      sfLine = ' That\'s a <strong style="color:'+col+'">'+sfSign2+sfShift.toLocaleString()+' SF</strong> shift in space requirement.';
+    }
+    var utilLine = '';
+    if (hasSeats && proposed.util !== null && cur.util !== null) {
+      var uCol = proposed.util > (state.oversubscribedThreshold||80) ? '#ff6b6b' : proposed.util < (state.vibrancyThreshold||67) ? '#538184' : '#17E88F';
+      utilLine = ' Utilization moves from <strong>'+cur.util+'%</strong> to <strong style="color:'+uCol+'">'+proposed.util+'%</strong>.';
+    }
+    body = 'Moving from a <strong>'+cur.label+' ('+cur.rate+'%)</strong> to a <strong>'+proposed.label+' ('+proposed.rate+'%)</strong> policy would '
+      + direction+' peak seat demand by <strong style="color:'+col+'">'+seatSign+seatChange.toLocaleString()+' seats</strong> '
+      + arrow+' ('+Math.abs(Math.round(seatChange/Math.max(cur.peak,1)*100))+'% change).'
+      + sfLine + utilLine;
   }
 
   return '<div style="background:rgba(23,232,143,.05);border:1px solid rgba(23,232,143,.2);border-radius:12px;padding:1rem 1.25rem;margin-bottom:1rem;display:flex;align-items:flex-start;gap:.85rem">'
     + '<div style="font-size:1.75rem;line-height:1;margin-top:.1rem">🔄</div>'
     + '<div style="flex:1">'
     + '<div style="font-size:.82rem;font-weight:700;color:var(--text);margin-bottom:.35rem">Policy Impact: '+cur.label+' → '+proposed.label+'</div>'
-    + '<div style="font-size:.78rem;color:rgba(242,244,243,.65);line-height:1.7">'
-    + 'Moving from a <strong>'+cur.label+' ('+cur.rate+'%)</strong> to a <strong>'+proposed.label+' ('+proposed.rate+'%)</strong> policy would '
-    + direction+' peak seat demand by <strong style="color:'+col+'">'+seatSign+seatChange.toLocaleString()+' seats</strong> '
-    + arrow+' ('+Math.abs(Math.round(seatChange/Math.max(cur.peak,1)*100))+'% change).'
-    + sfLine + utilLine
-    + '</div>'
+    + '<div style="font-size:.78rem;color:rgba(242,244,243,.65);line-height:1.7">'+body+'</div>'
     + '</div>'
     + '</div>';
 }
@@ -2733,10 +2824,15 @@ function buildFlexBarChart(d, hasSeats, vibrancy, oversub) {
 }
 
 function buildFlexTable(d, hasSeats, hasSF, vibrancy, oversub) {
+  var seatsColLabel = d.model === 'assigned' ? 'Desks (1:1)'
+                    : d.model === 'ratio'    ? 'Desks (÷'+d.ratio+')'
+                    : 'Peak Seats';
+  var utilColLabel  = d.model === 'assigned' ? 'Peak Occupancy' : 'Utilization';
+
   var h = '<div class="chart-card"><div class="chart-title" style="margin-bottom:.85rem">Policy Comparison Table</div>'
     + '<div class="tbl-wrap"><table class="data-tbl"><thead><tr>'
-    + '<th>Policy</th><th>Days/Wk</th><th>Peak Rate</th><th>Peak Seats</th>'
-    + (hasSeats ? '<th>Utilization</th><th>Seat Delta</th>' : '')
+    + '<th>Policy</th><th>Days/Wk</th><th>Peak Rate</th><th>Peak Occupants</th><th>'+seatsColLabel+'</th>'
+    + (hasSeats ? '<th>'+utilColLabel+'</th><th>Desk Delta</th>' : '')
     + (hasSF    ? '<th>SF Needed</th><th>SF Delta</th>' : '')
     + '</tr></thead><tbody>';
 
@@ -2749,28 +2845,33 @@ function buildFlexTable(d, hasSeats, hasSF, vibrancy, oversub) {
       + '<td style="font-weight:600'+(p.isCurrent?';color:var(--accent)':'')+'">'+p.label+(p.isCurrent?' <span style="font-size:.6rem;opacity:.7">current</span>':'')+'</td>'
       + '<td>'+p.days+' days</td>'
       + '<td>'+p.rate+'%</td>'
-      + '<td>'+p.peak.toLocaleString()+'</td>';
+      + '<td>'+p.peak.toLocaleString()+'</td>'
+      + '<td style="font-weight:600">'+p.seatsNeeded.toLocaleString()+'</td>';
 
     if (hasSeats) {
       var utilCol = isOver ? '#ff6b6b' : isLow ? '#538184' : '#17E88F';
       h += '<td style="color:'+utilCol+';font-weight:600">'+(p.util !== null ? p.util+'%'+statusIcon : '—')+'</td>';
-      var sd = p.seatDelta; var sdSign = sd >= 0 ? '+' : '';
+      var sd = p.seatDelta; var sdSign = sd > 0 ? '+' : '';
       h += '<td style="color:'+(sd>0?'#ff6b6b':sd<0?'#17E88F':'rgba(242,244,243,.5)')+'">'+(sd !== null ? sdSign+sd.toLocaleString() : '—')+'</td>';
     }
     if (hasSF) {
       h += '<td>'+(p.sfNeeded !== null ? p.sfNeeded.toLocaleString()+' SF' : '—')+'</td>';
-      var sfd = p.sfDelta; var sfdSign = sfd >= 0 ? '+' : '';
+      var sfd = p.sfDelta; var sfdSign = sfd > 0 ? '+' : '';
       h += '<td style="color:'+(sfd>0?'#ff6b6b':sfd<0?'#17E88F':'rgba(242,244,243,.5)')+'">'+(sfd !== null ? sfdSign+sfd.toLocaleString()+' SF' : '—')+'</td>';
     }
 
     h += '</tr>';
   });
 
+  var footNote = d.model === 'assigned'
+    ? 'Assigned 1:1: desk count = HC regardless of policy. Occupancy = peak attendees ÷ total desks.'
+    : d.model === 'ratio'
+    ? 'Sharing ratio '+d.ratio+':1 — desks provisioned = HC ÷ '+d.ratio+' = '+Math.round(d.provisionedSeats).toLocaleString()+' desks. Utilization = peak ÷ provisioned.'
+    : 'Shared / unassigned: desks provisioned = peak attendance. 🔴 >'+oversub+'% · 🔵 <'+vibrancy+'% · 🟢 Optimal';
+
   h += '</tbody></table></div>'
-    + '<div style="font-size:.65rem;color:rgba(242,244,243,.28);margin-top:.5rem">'
-    + '🔴 Over-subscribed (>'+oversub+'% util) · 🔵 Under-vibrancy (<'+vibrancy+'% util) · 🟢 Optimal range'
-    + (hasSF ? ' · SF delta vs. current '+d.totalSF.toLocaleString()+' SF' : '')
-    + '</div></div>';
+    + '<div style="font-size:.65rem;color:rgba(242,244,243,.28);margin-top:.5rem">'+footNote+'</div>'
+    + '</div>';
   return h;
 }
 
