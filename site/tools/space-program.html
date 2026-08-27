@@ -1,0 +1,1324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Space Program Viewer — CBRE Workplace Tools</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet">
+<style>
+/* ── Tokens ─────────────────────────────────────────────────────────────────── */
+:root {
+  --bg:           #F5F8F6;
+  --surface:      #FFFFFF;
+  --surface-alt:  #EEF3F0;
+  --border:       #D0DDD7;
+  --border-subtle:#E6EDE9;
+  --text:         #1A2620;
+  --text-muted:   #5A706A;
+  --text-dim:     #8FA59E;
+  --green-dark:   #003F2D;
+  --green:        #006A4E;
+  --mint:         #17E88F;
+  --me:        #1D4E89;  --me-light:  #EBF0F9;
+  --we:        #2E7D32;  --we-light:  #EBF4EB;
+  --sup:       #8B6914;  --sup-light: #F6F0E0;
+  --ame:       #7B2D8B;  --ame-light: #F5EBF8;
+  --radius: 6px;
+  --shadow: 0 1px 4px rgba(0,63,45,.06), 0 4px 16px rgba(0,63,45,.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:#0C1410; --surface:#152218; --surface-alt:#1B2D24;
+    --border:#2A3D33; --border-subtle:#1F3029;
+    --text:#E2EDE7; --text-muted:#8BAF9A; --text-dim:#4D7060;
+    --me-light:#0F1E34; --we-light:#0F2210; --sup-light:#1E1800; --ame-light:#1C0D22;
+    --shadow:0 1px 6px rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"] {
+  --bg:#0C1410; --surface:#152218; --surface-alt:#1B2D24;
+  --border:#2A3D33; --border-subtle:#1F3029;
+  --text:#E2EDE7; --text-muted:#8BAF9A; --text-dim:#4D7060;
+  --me-light:#0F1E34; --we-light:#0F2210; --sup-light:#1E1800; --ame-light:#1C0D22;
+  --shadow:0 1px 6px rgba(0,0,0,.4);
+}
+
+/* ── Reset ──────────────────────────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{font-size:14px;-webkit-font-smoothing:antialiased;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',system-ui,sans-serif;font-weight:400;line-height:1.5;min-height:100vh;}
+button{cursor:pointer;font-family:inherit;}
+input[type=number]{font-family:'DM Sans',system-ui,sans-serif;font-variant-numeric:tabular-nums;}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;}
+input[type=number]{-moz-appearance:textfield;}
+
+/* ── Import screen ──────────────────────────────────────────────────────────── */
+#import-screen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 24px 80px;
+  max-width: 860px;
+  margin: 0 auto;
+}
+.import-back {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: .05em;
+  padding: 0;
+  margin-bottom: 32px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+}
+.import-back:hover { color: var(--green); }
+.import-brand {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+.import-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.import-sub {
+  font-size: 13px;
+  color: var(--text-muted);
+  max-width: 540px;
+  text-align: center;
+  line-height: 1.6;
+  margin-bottom: 40px;
+}
+
+/* instructions panel */
+.instructions {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 24px 28px;
+  width: 100%;
+  margin-bottom: 28px;
+}
+.instr-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--green-dark);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.instr-steps {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media(max-width:600px){.instr-steps{grid-template-columns:1fr;}}
+.instr-step {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.instr-num {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  background: var(--green-dark);
+  color: var(--mint);
+  border-radius: 50%;
+  font-family: 'Syne', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.instr-body h4 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+.instr-body p {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.instr-body code {
+  font-size: 10px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-family: monospace;
+  color: var(--green);
+}
+.instr-note {
+  margin-top: 14px;
+  padding: 10px 14px;
+  background: var(--surface-alt);
+  border-left: 3px solid var(--mint);
+  border-radius: 0 4px 4px 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* upload zone */
+.upload-zone {
+  background: var(--surface);
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  width: 100%;
+  padding: 48px 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+  text-align: center;
+  position: relative;
+}
+.upload-zone:hover, .upload-zone.dragover {
+  border-color: var(--green);
+  background: var(--surface-alt);
+}
+.upload-zone input[type=file] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+}
+.upload-icon {
+  font-size: 32px;
+  line-height: 1;
+}
+.upload-label {
+  font-family: 'Syne', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.upload-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.upload-btn-label {
+  background: var(--green-dark);
+  color: #fff;
+  border-radius: 6px;
+  padding: 8px 22px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  pointer-events: none;
+}
+
+/* file pills */
+.file-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 20px;
+}
+.file-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+.file-pill-icon { font-size: 18px; flex-shrink: 0; }
+.file-pill-info { flex: 1; min-width: 0; }
+.file-pill-name { font-size: 12px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.file-pill-meta { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+.file-pill-status { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 3px; }
+.status-ok  { background: #dcfce7; color: #166534; }
+.status-err { background: #fee2e2; color: #991b1b; }
+.status-loading { background: var(--surface-alt); color: var(--text-muted); }
+.file-pill-remove { background: none; border: none; color: var(--text-dim); font-size: 16px; line-height: 1; padding: 0 4px; flex-shrink: 0; }
+.file-pill-remove:hover { color: var(--text); }
+
+.import-error {
+  width: 100%;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 12px;
+  color: #991b1b;
+  margin-top: 10px;
+  display: none;
+}
+
+.import-actions {
+  width: 100%;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+.btn-primary {
+  background: var(--green-dark);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 28px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  transition: opacity .15s;
+  cursor: pointer;
+}
+.btn-primary:hover { opacity: .85; }
+.btn-primary:disabled { opacity: .35; cursor: default; }
+
+/* ── App shell (hidden until data loaded) ───────────────────────────────────── */
+#app-shell { display: none; }
+
+/* ── Header ──────────────────────────────────────────────────────────────────── */
+.site-header {
+  background: var(--green-dark);
+  color: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 12px rgba(0,0,0,.25);
+}
+.header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 14px 28px 10px;
+  flex-wrap: wrap;
+}
+.project-eyebrow { font-family:'DM Sans',sans-serif; font-size:10px; font-weight:500; letter-spacing:.12em; text-transform:uppercase; color:rgba(255,255,255,.5); margin-bottom:3px; }
+.project-title { font-family:'Syne',sans-serif; font-weight:700; font-size:18px; color:#fff; line-height:1.2; }
+.project-meta-right { font-size:11px; color:rgba(255,255,255,.55); text-align:right; line-height:1.7; flex-shrink:0; }
+.project-meta-right strong { color:rgba(255,255,255,.85); font-weight:500; }
+.header-reset-btn {
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: 4px;
+  color: rgba(255,255,255,.7);
+  font-size: 11px;
+  font-family: inherit;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: background .15s;
+}
+.header-reset-btn:hover { background: rgba(255,255,255,.18); color: #fff; }
+
+/* tab bar */
+.tab-bar { display:flex; padding:0 28px; gap:2px; border-top:1px solid rgba(255,255,255,.08); overflow-x:auto; }
+.tab-btn { background:none; border:none; color:rgba(255,255,255,.5); font-family:'DM Sans',sans-serif; font-size:12px; font-weight:500; padding:9px 18px; position:relative; transition:color .18s; white-space:nowrap; }
+.tab-btn::after { content:''; position:absolute; bottom:0; left:0; right:0; height:2px; background:var(--mint); opacity:0; transition:opacity .18s; }
+.tab-btn:hover { color:rgba(255,255,255,.8); }
+.tab-btn.active { color:#fff; }
+.tab-btn.active::after { opacity:1; }
+.tab-btn .scenario-badge { display:inline-block; background:rgba(255,255,255,.12); border-radius:3px; padding:0 5px; font-size:10px; font-weight:600; margin-right:6px; vertical-align:middle; }
+.tab-btn.active .scenario-badge { background:var(--mint); color:var(--green-dark); }
+.tab-spacer { flex:1; }
+.sf-toggle { display:flex; align-items:center; background:rgba(255,255,255,.08); border-radius:4px; padding:3px; gap:2px; margin:5px 0; }
+.sf-opt { background:none; border:none; color:rgba(255,255,255,.5); font-family:'DM Sans',sans-serif; font-size:10px; font-weight:700; letter-spacing:.08em; padding:3px 10px; border-radius:3px; transition:background .15s, color .15s; }
+.sf-opt:hover { color:rgba(255,255,255,.8); }
+.sf-opt.active { background:var(--mint); color:var(--green-dark); }
+
+/* ── Assumptions bar ─────────────────────────────────────────────────────────── */
+.assumptions-bar { background:var(--surface); border-bottom:1px solid var(--border); overflow:hidden; }
+.assumptions-toggle { display:flex; align-items:center; gap:8px; padding:8px 28px; font-size:11px; font-weight:500; color:var(--text-muted); background:none; border:none; width:100%; text-align:left; cursor:pointer; text-transform:uppercase; letter-spacing:.08em; transition:color .15s; }
+.assumptions-toggle:hover { color:var(--green); }
+.toggle-icon { font-size:9px; transition:transform .2s; }
+.assumptions-bar.open .toggle-icon { transform:rotate(90deg); }
+.assumptions-panel { display:none; padding:12px 28px 16px; gap:24px; flex-wrap:wrap; align-items:flex-end; background:var(--surface-alt); border-top:1px solid var(--border-subtle); }
+.assumptions-bar.open .assumptions-panel { display:flex; }
+.assumption-field { display:flex; flex-direction:column; gap:4px; }
+.assumption-field label { font-size:10px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--text-muted); }
+.assumption-input-wrap { display:flex; align-items:center; gap:4px; background:var(--surface); border:1.5px solid var(--border); border-radius:var(--radius); padding:0 8px; transition:border-color .15s; }
+.assumption-input-wrap:focus-within { border-color:var(--green); }
+.assumption-input-wrap input { width:44px; padding:5px 0; border:none; background:none; color:var(--text); font-size:13px; font-weight:500; outline:none; text-align:right; }
+.assumption-input-wrap span { font-size:12px; color:var(--text-muted); }
+.assumption-note { font-size:10px; color:var(--text-dim); max-width:340px; line-height:1.4; align-self:center; border-left:2px solid var(--border); padding-left:12px; }
+
+/* ── Summary strip ───────────────────────────────────────────────────────────── */
+.summary-strip { background:var(--surface); border-bottom:1px solid var(--border); padding:18px 28px; display:flex; gap:28px; flex-wrap:wrap; align-items:center; }
+.stat-tiles { display:flex; gap:2px; flex-wrap:wrap; }
+.stat-tile { display:flex; flex-direction:column; align-items:center; padding:10px 16px; background:var(--surface-alt); border-radius:var(--radius); min-width:84px; }
+.stat-tile+.stat-tile { border-radius:0; }
+.stat-tile:first-child { border-radius:var(--radius) 0 0 var(--radius); }
+.stat-tile:last-child  { border-radius:0 var(--radius) var(--radius) 0; }
+.stat-value { font-family:'DM Sans',sans-serif; font-variant-numeric:tabular-nums; font-size:20px; font-weight:600; color:var(--text); line-height:1; white-space:nowrap; }
+.stat-label { font-size:9.5px; font-weight:500; letter-spacing:.07em; text-transform:uppercase; color:var(--text-muted); margin-top:4px; white-space:nowrap; }
+.composition-section { flex:1; min-width:280px; }
+.composition-title { font-size:10px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--text-muted); margin-bottom:8px; }
+.composition-bar { height:16px; border-radius:3px; display:flex; max-width:480px; overflow:hidden; gap:2px; background:var(--border-subtle); margin-bottom:8px; }
+.bar-seg { height:100%; border-radius:2px; transition:flex-basis .4s cubic-bezier(.4,0,.2,1); min-width:2px; }
+.bar-me { background:var(--me); } .bar-we { background:var(--we); } .bar-support { background:var(--sup); } .bar-amenity { background:var(--ame); }
+.composition-legend { display:flex; gap:16px; flex-wrap:wrap; }
+.legend-item { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--text-muted); }
+.legend-dot { width:8px; height:8px; border-radius:2px; flex-shrink:0; }
+.dot-me { background:var(--me); } .dot-we { background:var(--we); } .dot-support { background:var(--sup); } .dot-amenity { background:var(--ame); }
+.legend-pct { font-weight:600; color:var(--text); margin-left:2px; }
+
+/* ── Main content ────────────────────────────────────────────────────────────── */
+.main-content { padding:24px 28px 60px; max-width:1200px; }
+
+/* ── Program table ───────────────────────────────────────────────────────────── */
+.program-table-wrap { overflow-x:auto; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); }
+.program-table { width:100%; border-collapse:collapse; font-size:12.5px; font-variant-numeric:tabular-nums; }
+.program-table thead tr { background:var(--green-dark); }
+.program-table thead th { padding:9px 12px; font-family:'DM Sans',sans-serif; font-size:10px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:rgba(255,255,255,.65); text-align:left; white-space:nowrap; }
+.program-table thead th.num { text-align:right; }
+.program-table thead th:first-child { padding-left:16px; }
+.program-table thead th:last-child  { padding-right:16px; }
+.cat-header td { padding:8px 12px 6px; font-family:'Syne',sans-serif; font-size:10.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; border-top:2px solid transparent; }
+.cat-header td:first-child { padding-left:16px; }
+.cat-header.cat-me  td { background:var(--me-light);  color:var(--me);  border-top-color:var(--me); }
+.cat-header.cat-we  td { background:var(--we-light);  color:var(--we);  border-top-color:var(--we); }
+.cat-header.cat-sup td { background:var(--sup-light); color:var(--sup); border-top-color:var(--sup); }
+.cat-header.cat-ame td { background:var(--ame-light); color:var(--ame); border-top-color:var(--ame); }
+.data-row td { padding:6px 12px; border-bottom:1px solid var(--border-subtle); vertical-align:middle; }
+.data-row:last-of-type td { border-bottom:none; }
+.data-row:hover td { background:var(--surface-alt); }
+.data-row td:first-child { padding-left:20px; }
+.data-row td:last-child  { padding-right:16px; }
+.data-row .num { text-align:right; color:var(--text); }
+.data-row .computed { color:var(--text-muted); }
+.space-name { font-weight:500; color:var(--text); }
+.space-sub  { font-size:10px; color:var(--text-dim); margin-top:1px; }
+.type-chip { display:inline-block; padding:1px 6px; border-radius:3px; font-size:10px; font-weight:600; letter-spacing:.03em; text-transform:uppercase; white-space:nowrap; }
+.chip-open     { background:rgba(29,78,137,.12);  color:var(--me); }
+.chip-enclosed { background:rgba(46,125,50,.12);  color:var(--we); }
+.chip-support  { background:rgba(139,105,20,.12); color:var(--sup); }
+.chip-amenity  { background:rgba(123,45,139,.12); color:var(--ame); }
+.edit-input { display:block; width:100%; max-width:72px; margin-left:auto; background:none; border:none; border-bottom:1.5px dashed var(--border); color:var(--text); font-family:'DM Sans',sans-serif; font-size:12.5px; font-weight:500; font-variant-numeric:tabular-nums; text-align:right; padding:1px 0; outline:none; cursor:text; transition:border-color .15s; }
+.edit-input:focus { border-color:var(--green); }
+.edit-input:hover:not(:focus) { border-color:var(--text-muted); }
+.subtotal-row td { padding:7px 12px; border-top:1px solid var(--border); }
+.subtotal-row td:first-child { padding-left:20px; }
+.subtotal-row td:last-child  { padding-right:16px; }
+.subtotal-row .num { text-align:right; font-weight:600; }
+.subtotal-label { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+.subtotal-row.cat-me  td { background:var(--me-light);  color:var(--me); }
+.subtotal-row.cat-we  td { background:var(--we-light);  color:var(--we); }
+.subtotal-row.cat-sup td { background:var(--sup-light); color:var(--sup); }
+.subtotal-row.cat-ame td { background:var(--ame-light); color:var(--ame); }
+.subtotal-row.cat-me  .num,.subtotal-row.cat-we  .num,
+.subtotal-row.cat-sup .num,.subtotal-row.cat-ame .num { color:inherit; }
+.grand-total-row td { padding:10px 12px; background:var(--green-dark); color:#fff; font-weight:600; font-size:13px; }
+.grand-total-row td:first-child { padding-left:20px; }
+.grand-total-row td:last-child  { padding-right:16px; }
+.grand-total-row .num { text-align:right; color:var(--mint); }
+.grand-total-label { font-family:'Syne',sans-serif; font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:rgba(255,255,255,.7); }
+.rule-col { color:var(--text-dim); font-size:11px; white-space:nowrap; }
+.scenario-subtitle { font-size:11px; color:var(--text-muted); margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+.sc-badge { background:var(--green-dark); color:var(--mint); font-family:'Syne',sans-serif; font-size:10px; font-weight:700; letter-spacing:.06em; padding:2px 8px; border-radius:3px; }
+
+/* ── Workshop picker ──────────────────────────────────────────────────────────── */
+.workshop-picker { display:none; flex-direction:column; align-items:center; padding:40px 28px 48px; gap:24px; text-align:center; }
+.workshop-picker.visible { display:flex; }
+.picker-eyebrow { font-size:10px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--text-muted); }
+.picker-heading { font-family:'Syne',sans-serif; font-size:20px; font-weight:700; color:var(--text); max-width:480px; line-height:1.3; }
+.picker-sub { font-size:12px; color:var(--text-muted); max-width:400px; line-height:1.6; }
+.picker-cards { display:flex; gap:14px; flex-wrap:wrap; justify-content:center; width:100%; max-width:900px; }
+.picker-card { flex:1 1 200px; max-width:240px; background:var(--surface); border:2px solid var(--border); border-radius:8px; padding:18px 18px 16px; text-align:left; cursor:pointer; transition:border-color .18s, box-shadow .18s, transform .12s; }
+.picker-card:hover { border-color:var(--green); box-shadow:0 4px 20px rgba(0,106,78,.12); transform:translateY(-2px); }
+.picker-card-badge { display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; background:var(--green-dark); color:var(--mint); font-family:'Syne',sans-serif; font-size:11px; font-weight:700; border-radius:4px; margin-bottom:10px; }
+.picker-card-name { font-size:11px; font-weight:600; color:var(--text); line-height:1.4; margin-bottom:12px; }
+.picker-card-stats { display:flex; flex-direction:column; gap:5px; }
+.picker-stat { display:flex; justify-content:space-between; align-items:baseline; font-size:10.5px; border-bottom:1px solid var(--border-subtle); padding-bottom:4px; }
+.picker-stat:last-child { border-bottom:none; padding-bottom:0; }
+.picker-stat-label { color:var(--text-muted); }
+.picker-stat-value { font-weight:600; color:var(--text); font-variant-numeric:tabular-nums; }
+.picker-card-cta { display:flex; align-items:center; justify-content:center; gap:6px; margin-top:14px; padding:7px 0; background:var(--surface-alt); border-radius:4px; font-size:11px; font-weight:600; color:var(--green); letter-spacing:.04em; text-transform:uppercase; transition:background .15s; }
+.picker-card:hover .picker-card-cta { background:var(--green); color:#fff; }
+
+/* Workshop baseline bar */
+.workshop-baseline-bar { display:none; align-items:center; gap:10px; margin-bottom:14px; padding:8px 14px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); }
+.workshop-baseline-bar.visible { display:flex; }
+.wb-label { font-size:11px; color:var(--text-muted); }
+.wb-badge { background:var(--green-dark); color:var(--mint); font-family:'Syne',sans-serif; font-size:10px; font-weight:700; letter-spacing:.06em; padding:2px 8px; border-radius:3px; }
+.wb-name  { font-size:11px; font-weight:500; color:var(--text); }
+.wb-spacer { flex:1; }
+.wb-undo   { background:none; border:1.5px solid var(--border); border-radius:6px; padding:4px 10px; font-size:12px; font-family:inherit; cursor:pointer; color:var(--text-muted); margin-right:6px; transition:border-color .15s,color .15s,opacity .15s; }
+.wb-undo:not(:disabled):hover { border-color:var(--text-muted); color:var(--text); }
+.wb-undo:disabled { opacity:.35; cursor:default; }
+.wb-export { background:var(--green-dark); border:1.5px solid var(--green-dark); border-radius:6px; padding:4px 10px; font-size:12px; font-family:inherit; cursor:pointer; color:#fff; margin-right:6px; transition:opacity .15s; }
+.wb-export:hover { opacity:.85; }
+.wb-reset  { background:none; border:1.5px solid var(--border); border-radius:4px; color:var(--text-muted); font-size:10px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; padding:4px 10px; cursor:pointer; transition:border-color .15s,color .15s; }
+.wb-reset:hover { border-color:var(--text-muted); color:var(--text); }
+
+@media(max-width:700px){
+  .header-top,.tab-bar,.assumptions-panel,.summary-strip,.main-content{padding-left:16px;padding-right:16px;}
+  .stat-tiles{flex-wrap:wrap;}
+  .stat-tile{flex:1 0 80px;}
+}
+</style>
+</head>
+<body>
+
+<!-- ── Import screen ───────────────────────────────────────────────────────── -->
+<div id="import-screen">
+  <a href="/cbre-workplace-tools/" class="import-back">← Back to toolkit</a>
+
+  <div class="import-brand">CBRE Workplace Consulting · Internal Tool</div>
+  <h1 class="import-title">Space Program Viewer</h1>
+  <p class="import-sub">Upload 1–4 scenario exports from Parameter to view the full program, compare scenarios, and workshop edits — all locally in your browser. No data leaves your machine.</p>
+
+  <div class="instructions">
+    <div class="instr-title">📋 How to export from Parameter</div>
+    <div class="instr-steps">
+      <div class="instr-step">
+        <div class="instr-num">1</div>
+        <div class="instr-body">
+          <h4>Open your Parameter project</h4>
+          <p>Navigate to the scenario you want to export. Each scenario must be exported separately.</p>
+        </div>
+      </div>
+      <div class="instr-step">
+        <div class="instr-num">2</div>
+        <div class="instr-body">
+          <h4>Export as Excel</h4>
+          <p>Click <code>Export</code> → <code>Excel (.xlsx)</code>. The file will contain sheets: <code>Project</code>, <code>Program_Summary</code>, a scenario sheet, and <code>Glossary</code>.</p>
+        </div>
+      </div>
+      <div class="instr-step">
+        <div class="instr-num">3</div>
+        <div class="instr-body">
+          <h4>Upload up to 4 files here</h4>
+          <p>Each file becomes one scenario tab (A, B, C, D). The scenario name is read from the <code>Name</code> field on the scenario sheet.</p>
+        </div>
+      </div>
+      <div class="instr-step">
+        <div class="instr-num">4</div>
+        <div class="instr-body">
+          <h4>Use the Workshop tab</h4>
+          <p>Pick any scenario as a baseline and edit quantities and unit sizes live. Export your workshop program to Excel when done.</p>
+        </div>
+      </div>
+    </div>
+    <div class="instr-note">
+      <strong>Data privacy:</strong> All processing happens in your browser using the SheetJS library. No file content is uploaded to any server. Files are read locally and discarded when you close the tab.
+    </div>
+  </div>
+
+  <div class="upload-zone" id="uploadZone">
+    <input type="file" id="fileInput" accept=".xlsx,.xls" multiple>
+    <div class="upload-icon">📂</div>
+    <div class="upload-label">Drop Parameter exports here</div>
+    <div class="upload-hint">or click to browse — up to 4 .xlsx files</div>
+    <div class="upload-btn-label">Choose Files</div>
+  </div>
+
+  <div class="file-list" id="fileList"></div>
+  <div class="import-error" id="importError"></div>
+
+  <div class="import-actions">
+    <button class="btn-primary" id="launchBtn" disabled>View Program →</button>
+  </div>
+</div>
+
+<!-- ── App shell ───────────────────────────────────────────────────────────── -->
+<div id="app-shell">
+  <div class="site-header">
+    <div class="header-top">
+      <div>
+        <div class="project-eyebrow">CBRE Workplace Consulting · Confidential</div>
+        <h1 class="project-title" id="appTitle">Space Program</h1>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="project-meta-right" id="appMeta"></div>
+        <button class="header-reset-btn" id="headerResetBtn">← Change files</button>
+      </div>
+    </div>
+    <div class="tab-bar" id="tabBar">
+      <div class="tab-spacer"></div>
+      <div class="sf-toggle" id="sfToggle">
+        <button class="sf-opt active" data-sf="usf">USF</button>
+        <button class="sf-opt" data-sf="rsf">RSF</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="assumptions-bar" id="assumptionsBar">
+    <button class="assumptions-toggle" id="assumptionsToggle">
+      <span class="toggle-icon">▶</span> Assumptions
+    </button>
+    <div class="assumptions-panel">
+      <div class="assumption-field">
+        <label>Circ. Open</label>
+        <div class="assumption-input-wrap">
+          <input type="number" id="circOpen" value="45" min="0" max="99"><span>%</span>
+        </div>
+      </div>
+      <div class="assumption-field">
+        <label>Circ. Enclosed</label>
+        <div class="assumption-input-wrap">
+          <input type="number" id="circEnclosed" value="25" min="0" max="99"><span>%</span>
+        </div>
+      </div>
+      <div class="assumption-field">
+        <label>Circ. Support / Amenity</label>
+        <div class="assumption-input-wrap">
+          <input type="number" id="circSupport" value="35" min="0" max="99"><span>%</span>
+        </div>
+      </div>
+      <div class="assumption-field">
+        <label>Loss Factor (USF→RSF)</label>
+        <div class="assumption-input-wrap">
+          <input type="number" id="lossFactor" value="10" min="0" max="99"><span>%</span>
+        </div>
+      </div>
+      <p class="assumption-note">Overrides the Parameter defaults. NSF → USF via circulation by space type; USF → RSF via loss factor. Items flagged <em>no circ</em> pass NSF directly to USF.</p>
+    </div>
+  </div>
+
+  <div class="summary-strip">
+    <div class="stat-tiles">
+      <div class="stat-tile"><div class="stat-value" id="sum-usf">—</div><div class="stat-label">Total USF</div></div>
+      <div class="stat-tile"><div class="stat-value" id="sum-rsf">—</div><div class="stat-label">Total RSF</div></div>
+      <div class="stat-tile"><div class="stat-value" id="sum-usf-seat">—</div><div class="stat-label">USF / Seat</div></div>
+      <div class="stat-tile"><div class="stat-value" id="sum-rsf-seat">—</div><div class="stat-label">RSF / Seat</div></div>
+      <div class="stat-tile"><div class="stat-value" id="sum-seats">—</div><div class="stat-label">Ind. Seats</div></div>
+      <div class="stat-tile"><div class="stat-value" id="sum-collab">—</div><div class="stat-label">Collab Ratio</div></div>
+    </div>
+    <div class="composition-section">
+      <div class="composition-title" id="compTitle">Space Composition — USF</div>
+      <div class="composition-bar">
+        <div class="bar-seg bar-me"      id="bMe"  style="flex:58"></div>
+        <div class="bar-seg bar-we"      id="bWe"  style="flex:17"></div>
+        <div class="bar-seg bar-support" id="bSup" style="flex:16"></div>
+        <div class="bar-seg bar-amenity" id="bAme" style="flex:9"></div>
+      </div>
+      <div class="composition-legend">
+        <span class="legend-item"><span class="legend-dot dot-me"></span>Me Space <span class="legend-pct" id="pMe"></span></span>
+        <span class="legend-item"><span class="legend-dot dot-we"></span>We Space <span class="legend-pct" id="pWe"></span></span>
+        <span class="legend-item"><span class="legend-dot dot-support"></span>Support <span class="legend-pct" id="pSup"></span></span>
+        <span class="legend-item"><span class="legend-dot dot-amenity"></span>Amenity <span class="legend-pct" id="pAme"></span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="main-content">
+    <!-- Workshop picker -->
+    <div class="workshop-picker" id="workshopPicker">
+      <div class="picker-eyebrow">Workshop Mode</div>
+      <h2 class="picker-heading">Choose a starting baseline to begin modeling</h2>
+      <p class="picker-sub">All quantities and unit sizes become editable. Changes stay in the Workshop tab and do not affect the reference scenarios.</p>
+      <div class="picker-cards" id="pickerCards"></div>
+    </div>
+
+    <!-- Table section -->
+    <div id="tableSection">
+      <div class="scenario-subtitle">
+        <div class="workshop-baseline-bar" id="workshopBaselineBar">
+          <span class="wb-label">Baseline</span>
+          <span class="wb-badge" id="wbBadge"></span>
+          <span class="wb-name" id="wbName"></span>
+          <span class="wb-spacer"></span>
+          <button class="wb-undo" id="wbUndo" disabled>← Undo</button>
+          <button class="wb-export" id="wbExport">↓ Export Excel</button>
+          <button class="wb-reset" id="wbReset">↩ Change baseline</button>
+        </div>
+        <div id="scSubtitleWrap" style="display:flex;align-items:center;gap:8px;">
+          <span class="sc-badge" id="scBadge">A</span>
+          <span id="scSubtitle"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="program-table-wrap" id="tableWrap">
+      <table class="program-table" id="progTable">
+        <thead>
+          <tr>
+            <th style="min-width:200px">Space Name</th>
+            <th>Type</th>
+            <th>Allocation</th>
+            <th class="num" style="width:64px">Qty</th>
+            <th class="num" style="width:80px">Unit NSF</th>
+            <th class="num" style="width:76px">NSF</th>
+            <th class="num" style="width:76px" id="sfColHeader">USF</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ─── State ───────────────────────────────────────────────────────────────────── */
+var gState = {
+  sc: null,
+  sfMode: 'usf',
+  scenarios: [],       // [{key, label, sub, items: [{id,cat,sub,name,type,size,qty,seats,rule,noCirc}]}]
+  BASE: null,          // canonical reference; set after import
+  items: [],           // current display items
+  workshopItems: null,
+  workshopBaseline: null,
+  undoStack: [],
+  circOpen: 45, circEnclosed: 25, circSupport: 35, lossFactor: 10,
+  projectName: '',
+};
+
+const CATS = [
+  { key:'me',      label:'Me Space — Individual',    cls:'cat-me'  },
+  { key:'we',      label:'We Space — Collaboration', cls:'cat-we'  },
+  { key:'support', label:'Support Space',            cls:'cat-sup' },
+  { key:'amenity', label:'Amenity Space',            cls:'cat-ame' },
+];
+const CAT_MAP = { me:'me', we:'we', support:'sup', amenity:'ame' };
+const TYPE_CHIP = {
+  open:     ['Open',     'chip-open'],
+  enclosed: ['Enclosed', 'chip-enclosed'],
+  support:  ['Support',  'chip-support'],
+  amenity:  ['Amenity',  'chip-amenity'],
+};
+
+/* ─── Calculation ──────────────────────────────────────────────────────────────── */
+function circFactor(item) {
+  if (item.noCirc) return 1;
+  var o = gState.circOpen / 100, e = gState.circEnclosed / 100, s = gState.circSupport / 100;
+  if (item.type === 'open')     return 1 / (1 - o);
+  if (item.type === 'enclosed') return 1 / (1 - e);
+  if (item.type === 'support')  return 1 / (1 - s);
+  if (item.type === 'amenity')  return 1 / (1 - s);
+  return 1;
+}
+function calcRow(item) {
+  var nsf = (item.qty || 0) * (item.size || 0);
+  var usf = Math.round(nsf * circFactor(item));
+  var rsf = Math.round(usf / (1 - gState.lossFactor / 100));
+  return { nsf: nsf, usf: usf, rsf: rsf };
+}
+function sfVal(row) { return gState.sfMode === 'rsf' ? row.rsf : row.usf; }
+var fmt = function(n) { return Math.round(n).toLocaleString('en-US'); };
+
+function calcTotals() {
+  var cats = {};
+  CATS.forEach(function(c) { cats[c.key] = { nsf:0, usf:0, rsf:0, seats:0, primarySeats:0, wseats:0 }; });
+  gState.items.forEach(function(item) {
+    var r = calcRow(item); var c = cats[item.cat];
+    if (!c) return;
+    c.nsf += r.nsf; c.usf += r.usf; c.rsf += r.rsf;
+    if (item.cat === 'me') {
+      c.seats += (item.qty || 0) * (item.seats || 0);
+      if (item.sub !== 'Alternative') c.primarySeats += (item.qty || 0) * (item.seats || 0);
+    }
+    if (item.cat === 'we') c.wseats += (item.qty || 0) * (item.seats || 0);
+  });
+  return cats;
+}
+
+/* ─── Render ────────────────────────────────────────────────────────────────────── */
+function renderTable() {
+  var tbody = document.getElementById('tableBody');
+  var hdr = document.getElementById('sfColHeader');
+  if (hdr) hdr.textContent = gState.sfMode.toUpperCase();
+  var frags = [];
+  var editable = gState.sc === 'W';
+
+  CATS.forEach(function(cat) {
+    var items = gState.items.filter(function(i) { return i.cat === cat.key; });
+    if (!items.length) return;
+    frags.push('<tr class="cat-header ' + cat.cls + '"><td colspan="7">' + cat.label + '</td></tr>');
+    var lastSub = null;
+    items.forEach(function(item) {
+      var row = calcRow(item);
+      var chip = TYPE_CHIP[item.type] || ['—', ''];
+      var subHtml = (item.sub && item.sub !== lastSub) ? '<div class="space-sub">' + item.sub + '</div>' : '';
+      if (item.sub) lastSub = item.sub;
+      var qtyCell  = editable
+        ? '<input class="edit-input" type="number" data-field="qty"  data-id="' + item.id + '" value="' + (item.qty||0)  + '" min="0" max="9999">'
+        : '<span>' + (item.qty||0) + '</span>';
+      var sizeCell = editable
+        ? '<input class="edit-input" type="number" data-field="size" data-id="' + item.id + '" value="' + (item.size||0) + '" min="0" max="99999">'
+        : '<span>' + (item.size||0) + '</span>';
+      frags.push(
+        '<tr class="data-row" data-id="' + item.id + '">' +
+        '<td><div class="space-name">' + item.name + '</div>' + subHtml + '</td>' +
+        '<td><span class="type-chip ' + chip[1] + '">' + chip[0] + '</span></td>' +
+        '<td class="rule-col">' + (item.rule||'—') + '</td>' +
+        '<td class="num">' + qtyCell + '</td>' +
+        '<td class="num">' + sizeCell + '</td>' +
+        '<td class="num computed">' + fmt(row.nsf) + '</td>' +
+        '<td class="num computed sf-val">' + fmt(sfVal(row)) + '</td>' +
+        '</tr>'
+      );
+    });
+    var totNSF = items.reduce(function(a,i) { return a + calcRow(i).nsf; }, 0);
+    var totSF  = items.reduce(function(a,i) { return a + sfVal(calcRow(i)); }, 0);
+    frags.push('<tr class="subtotal-row ' + cat.cls + '"><td colspan="5"><span class="subtotal-label">' + cat.label + ' Total</span></td><td class="num">' + fmt(totNSF) + '</td><td class="num sf-val">' + fmt(totSF) + '</td></tr>');
+  });
+
+  var all = gState.items.map(calcRow);
+  var gNSF = all.reduce(function(a,r) { return a+r.nsf; }, 0);
+  var gSF  = all.reduce(function(a,r) { return a+sfVal(r); }, 0);
+  frags.push('<tr class="grand-total-row"><td colspan="5"><span class="grand-total-label">Grand Total</span></td><td class="num">' + fmt(gNSF) + '</td><td class="num sf-val">' + fmt(gSF) + '</td></tr>');
+
+  tbody.innerHTML = frags.join('');
+  if (editable) bindInputs();
+}
+
+function renderSummary() {
+  var cats = calcTotals();
+  var totUSF = Object.keys(cats).reduce(function(a,k) { return a+cats[k].usf; }, 0);
+  var totRSF = Object.keys(cats).reduce(function(a,k) { return a+cats[k].rsf; }, 0);
+  var indSeats = cats.me.seats;
+  var primarySeats = cats.me.primarySeats;
+  var weSeats = cats.we.wseats;
+  var collabRatio = primarySeats ? (weSeats/primarySeats).toFixed(2)+' : 1' : '—';
+
+  document.getElementById('sum-usf').textContent      = fmt(totUSF);
+  document.getElementById('sum-rsf').textContent      = fmt(totRSF);
+  document.getElementById('sum-usf-seat').textContent = primarySeats ? fmt(Math.round(totUSF/primarySeats)) : '—';
+  document.getElementById('sum-rsf-seat').textContent = primarySeats ? fmt(Math.round(totRSF/primarySeats)) : '—';
+  document.getElementById('sum-seats').textContent    = fmt(indSeats);
+  document.getElementById('sum-collab').textContent   = collabRatio;
+
+  var base = totUSF || 1;
+  document.getElementById('bMe').style.flex  = ((cats.me.usf/base)*100).toFixed(1);
+  document.getElementById('bWe').style.flex  = ((cats.we.usf/base)*100).toFixed(1);
+  document.getElementById('bSup').style.flex = ((cats.support.usf/base)*100).toFixed(1);
+  document.getElementById('bAme').style.flex = ((cats.amenity.usf/base)*100).toFixed(1);
+  document.getElementById('pMe').textContent  = ((cats.me.usf/base)*100).toFixed(0)+'%';
+  document.getElementById('pWe').textContent  = ((cats.we.usf/base)*100).toFixed(0)+'%';
+  document.getElementById('pSup').textContent = ((cats.support.usf/base)*100).toFixed(0)+'%';
+  document.getElementById('pAme').textContent = ((cats.amenity.usf/base)*100).toFixed(0)+'%';
+  document.getElementById('compTitle').textContent = 'Space Composition — ' + gState.sfMode.toUpperCase();
+}
+
+function renderSubtotalsAndGrand() {
+  document.querySelectorAll('.subtotal-row').forEach(function(row) {
+    var cls = Array.from(row.classList).find(function(c) { return c.startsWith('cat-'); });
+    if (!cls) return;
+    var catKey = {'cat-me':'me','cat-we':'we','cat-sup':'support','cat-ame':'amenity'}[cls];
+    if (!catKey) return;
+    var items = gState.items.filter(function(i) { return i.cat === catKey; });
+    var totNSF = items.reduce(function(a,i) { return a+calcRow(i).nsf; }, 0);
+    var totSF  = items.reduce(function(a,i) { return a+sfVal(calcRow(i)); }, 0);
+    var nums = row.querySelectorAll('.num');
+    if (nums[0]) nums[0].textContent = fmt(totNSF);
+    if (nums[1]) nums[1].textContent = fmt(totSF);
+  });
+  var grand = document.querySelector('.grand-total-row');
+  if (grand) {
+    var all = gState.items.map(calcRow);
+    var nums = grand.querySelectorAll('.num');
+    if (nums[0]) nums[0].textContent = fmt(all.reduce(function(a,r){return a+r.nsf;},0));
+    if (nums[1]) nums[1].textContent = fmt(all.reduce(function(a,r){return a+sfVal(r);},0));
+  }
+  var hdr = document.getElementById('sfColHeader');
+  if (hdr) hdr.textContent = gState.sfMode.toUpperCase();
+}
+
+/* ─── Inputs / Undo ────────────────────────────────────────────────────────────── */
+function syncUndoBtn() {
+  var btn = document.getElementById('wbUndo');
+  if (btn) btn.disabled = gState.undoStack.length === 0;
+}
+function applyUndo() {
+  if (!gState.undoStack.length) return;
+  var top = gState.undoStack.pop();
+  var item = gState.items.find(function(i) { return i.id === top.id; });
+  if (!item) { syncUndoBtn(); return; }
+  item[top.field] = top.val;
+  var input = document.querySelector('.edit-input[data-id="'+top.id+'"][data-field="'+top.field+'"]');
+  if (input) input.value = top.val;
+  var row = document.querySelector('tr[data-id="'+top.id+'"]');
+  if (row) {
+    var calc = calcRow(item);
+    var cells = row.querySelectorAll('.computed');
+    if (cells[0]) cells[0].textContent = fmt(calc.nsf);
+    if (cells[1]) cells[1].textContent = fmt(sfVal(calc));
+  }
+  renderSubtotalsAndGrand();
+  renderSummary();
+  syncUndoBtn();
+}
+function bindInputs() {
+  document.querySelectorAll('.edit-input').forEach(function(input) {
+    input.addEventListener('change', function(e) {
+      var id    = e.target.dataset.id;
+      var field = e.target.dataset.field;
+      var val   = Math.max(0, parseInt(e.target.value, 10) || 0);
+      e.target.value = val;
+      var item = gState.items.find(function(i) { return i.id === id; });
+      if (!item) return;
+      gState.undoStack.push({ id: id, field: field, val: item[field] });
+      syncUndoBtn();
+      item[field] = val;
+      var row = e.target.closest('tr');
+      var calc = calcRow(item);
+      var cells = row.querySelectorAll('.computed');
+      if (cells[0]) cells[0].textContent = fmt(calc.nsf);
+      if (cells[1]) cells[1].textContent = fmt(sfVal(calc));
+      renderSubtotalsAndGrand();
+      renderSummary();
+    });
+    input.addEventListener('keydown', function(e) { if (e.key === 'Enter') e.target.blur(); });
+  });
+}
+
+/* ─── Workshop ─────────────────────────────────────────────────────────────────── */
+function workshopSummaryFor(scIdx) {
+  var sc = gState.scenarios[scIdx];
+  var totUSF=0, totRSF=0, indSeats=0, primarySeats=0, weSeats=0;
+  sc.items.forEach(function(item) {
+    var nsf = (item.qty||0) * (item.size||0);
+    var usf = Math.round(nsf * circFactor(item));
+    var rsf = Math.round(usf / (1 - gState.lossFactor/100));
+    totUSF += usf; totRSF += rsf;
+    if (item.cat === 'me') {
+      indSeats += (item.qty||0) * (item.seats||0);
+      if (item.sub !== 'Alternative') primarySeats += (item.qty||0) * (item.seats||0);
+    }
+    if (item.cat === 'we') weSeats += (item.qty||0) * (item.seats||0);
+  });
+  return { totUSF: totUSF, totRSF: totRSF, indSeats: indSeats, collab: primarySeats ? (weSeats/primarySeats).toFixed(2)+' : 1' : '—' };
+}
+
+function renderPickerCards() {
+  var letters = ['A','B','C','D'];
+  var container = document.getElementById('pickerCards');
+  container.innerHTML = gState.scenarios.map(function(sc, idx) {
+    var s = workshopSummaryFor(idx);
+    var letter = letters[idx] || String(idx+1);
+    return '<button class="picker-card" data-idx="'+idx+'">' +
+      '<div class="picker-card-badge">'+letter+'</div>' +
+      '<div class="picker-card-name">'+sc.label+'</div>' +
+      '<div class="picker-card-stats">' +
+        '<div class="picker-stat"><span class="picker-stat-label">Total USF</span><span class="picker-stat-value">'+fmt(s.totUSF)+'</span></div>' +
+        '<div class="picker-stat"><span class="picker-stat-label">Total RSF</span><span class="picker-stat-value">'+fmt(s.totRSF)+'</span></div>' +
+        '<div class="picker-stat"><span class="picker-stat-label">Ind. Seats</span><span class="picker-stat-value">'+fmt(s.indSeats)+'</span></div>' +
+        '<div class="picker-stat"><span class="picker-stat-label">Collab Ratio</span><span class="picker-stat-value">'+s.collab+'</span></div>' +
+      '</div>' +
+      '<div class="picker-card-cta">Start with this baseline →</div>' +
+      '</button>';
+  }).join('');
+  container.querySelectorAll('.picker-card').forEach(function(btn) {
+    btn.addEventListener('click', function() { pickWorkshopBaseline(parseInt(btn.dataset.idx)); });
+  });
+}
+
+function pickWorkshopBaseline(idx) {
+  var sc = gState.scenarios[idx];
+  gState.workshopBaseline = idx;
+  gState.undoStack = [];
+  syncUndoBtn();
+  gState.workshopItems = sc.items.map(function(i) { return Object.assign({}, i); });
+  gState.items = gState.workshopItems;
+  showWorkshopTable();
+  renderTable();
+  renderSummary();
+}
+
+function showWorkshopPicker() {
+  document.getElementById('workshopPicker').classList.add('visible');
+  document.getElementById('tableSection').style.display = 'none';
+  document.getElementById('tableWrap').style.display = 'none';
+  renderPickerCards();
+}
+function showWorkshopTable() {
+  document.getElementById('workshopPicker').classList.remove('visible');
+  document.getElementById('tableSection').style.display = '';
+  document.getElementById('tableWrap').style.display = '';
+  var sc = gState.scenarios[gState.workshopBaseline];
+  var letters = ['A','B','C','D'];
+  document.getElementById('workshopBaselineBar').classList.add('visible');
+  document.getElementById('scSubtitleWrap').style.display = 'none';
+  document.getElementById('wbBadge').textContent = letters[gState.workshopBaseline] || String(gState.workshopBaseline+1);
+  document.getElementById('wbName').textContent  = sc.label;
+}
+function resetWorkshop() {
+  gState.workshopBaseline = null;
+  gState.workshopItems = null;
+  gState.undoStack = [];
+  syncUndoBtn();
+  showWorkshopPicker();
+}
+
+/* ─── Scenario switch ──────────────────────────────────────────────────────────── */
+var LETTERS = ['A','B','C','D'];
+function switchScenario(key) {
+  gState.sc = key;
+  document.querySelectorAll('.tab-btn').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.sc === key);
+  });
+
+  if (key === 'W') {
+    if (gState.workshopBaseline !== null && gState.workshopItems) {
+      gState.items = gState.workshopItems;
+      showWorkshopTable();
+      renderTable();
+      renderSummary();
+    } else {
+      showWorkshopPicker();
+    }
+    return;
+  }
+
+  document.getElementById('workshopPicker').classList.remove('visible');
+  document.getElementById('tableSection').style.display = '';
+  document.getElementById('tableWrap').style.display = '';
+  document.getElementById('workshopBaselineBar').classList.remove('visible');
+  document.getElementById('scSubtitleWrap').style.display = '';
+
+  var scIdx = parseInt(key, 10);
+  var sc = gState.scenarios[scIdx];
+  gState.items = sc.items.map(function(i) { return Object.assign({}, i); });
+  document.getElementById('scBadge').textContent    = LETTERS[scIdx] || key;
+  document.getElementById('scSubtitle').textContent = sc.sub || sc.label;
+  renderTable();
+  renderSummary();
+}
+
+function switchSF(mode) {
+  gState.sfMode = mode;
+  document.querySelectorAll('.sf-opt').forEach(function(b) { b.classList.toggle('active', b.dataset.sf === mode); });
+  renderTable();
+  renderSummary();
+}
+
+function bindAssumptions() {
+  ['circOpen','circEnclosed','circSupport','lossFactor'].forEach(function(id) {
+    document.getElementById(id).addEventListener('input', function(e) {
+      var val = Math.min(99, Math.max(0, parseFloat(e.target.value) || 0));
+      gState[id] = val;
+      renderTable();
+      renderSummary();
+    });
+  });
+}
+
+/* ─── Export ────────────────────────────────────────────────────────────────────── */
+function exportWorkshop() {
+  var CAT_LABEL = { me:'Me Space', we:'We Space', support:'Support', amenity:'Amenity' };
+  var rows = [['Category','Sub-Category','Space Name','Type','Allocation Rule','Qty','Unit NSF','Total NSF','Total USF','Total RSF']];
+  var lastCat = null;
+  gState.items.forEach(function(item) {
+    var r = calcRow(item);
+    if (item.cat !== lastCat) { if (lastCat !== null) rows.push([]); lastCat = item.cat; }
+    rows.push([
+      CAT_LABEL[item.cat]||item.cat, item.sub||'', item.name,
+      item.type.charAt(0).toUpperCase()+item.type.slice(1),
+      item.rule||'', item.qty, item.size,
+      Math.round(r.nsf), Math.round(r.usf), Math.round(r.rsf),
+    ]);
+  });
+  rows.push([]);
+  var tNSF=gState.items.reduce(function(a,i){return a+calcRow(i).nsf;},0);
+  var tUSF=gState.items.reduce(function(a,i){return a+calcRow(i).usf;},0);
+  var tRSF=gState.items.reduce(function(a,i){return a+calcRow(i).rsf;},0);
+  rows.push(['TOTAL','','','','','','',Math.round(tNSF),Math.round(tUSF),Math.round(tRSF)]);
+  var ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [16,20,28,12,16,7,10,12,12,12].map(function(w){return{wch:w};});
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Workshop Program');
+  var sc = gState.scenarios[gState.workshopBaseline];
+  XLSX.writeFile(wb, (gState.projectName||'Space Program')+' - Workshop.xlsx');
+}
+
+/* ─── Parse Parameter Excel ─────────────────────────────────────────────────────── */
+function parseParameterFile(wb, fileIdx) {
+  // Find the scenario sheet — not Project, Program_Summary, Glossary
+  var reservedSheets = ['project','program_summary','glossary'];
+  var scSheet = null;
+  wb.SheetNames.forEach(function(name) {
+    if (!reservedSheets.includes(name.toLowerCase().trim())) scSheet = name;
+  });
+  if (!scSheet) throw new Error('Could not find scenario sheet. Expected a sheet that is not "Project", "Program_Summary", or "Glossary".');
+
+  var ws = wb.Sheets[scSheet];
+  var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+
+  // read scenario meta from top rows
+  var scenarioLabel = 'Scenario ' + LETTERS[fileIdx];
+  var scenarioSub   = '';
+  var circOpenVal = 45, circEnclosedVal = 25, circSupportVal = 35, lossFactorVal = 10;
+
+  rows.slice(0, 25).forEach(function(row) {
+    if (!row || !row[0]) return;
+    var k = String(row[0]).toLowerCase().trim();
+    var v = row[1];
+    if (k === 'name' && v) scenarioLabel = String(v);
+    if (k === 'description' && v) scenarioSub = String(v);
+    if (k === 'circulation factor open' && v !== null)       circOpenVal    = parseFloat(v)*100 || 45;
+    if (k === 'circulation factor enclosed' && v !== null)   circEnclosedVal= parseFloat(v)*100 || 25;
+    if ((k === 'circulation factor amenity/support' || k === 'circulation factor support') && v !== null)
+      circSupportVal = parseFloat(v)*100 || 35;
+    if (k === 'loss factor' && v !== null) lossFactorVal = parseFloat(v)*100 || 10;
+  });
+
+  // Use first file's assumptions as default
+  if (fileIdx === 0) {
+    gState.circOpen    = Math.min(99, Math.round(circOpenVal));
+    gState.circEnclosed= Math.min(99, Math.round(circEnclosedVal));
+    gState.circSupport = Math.min(99, Math.round(circSupportVal));
+    gState.lossFactor  = Math.min(99, Math.round(lossFactorVal));
+    // Update assumption inputs
+    ['circOpen','circEnclosed','circSupport','lossFactor'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.value = gState[id];
+    });
+  }
+
+  // Find SPACE PROGRAM header row
+  var spHeaderRow = -1;
+  rows.forEach(function(row, ri) {
+    if (row && row[0] && String(row[0]).toUpperCase().includes('SPACE PROGRAM')) spHeaderRow = ri;
+  });
+
+  // Find column header row just after SPACE PROGRAM
+  var colHeaderRow = -1;
+  if (spHeaderRow >= 0) {
+    for (var i = spHeaderRow+1; i < Math.min(spHeaderRow+5, rows.length); i++) {
+      if (rows[i] && rows[i].some(function(v) { return v && String(v).toLowerCase().includes('category'); }))
+        { colHeaderRow = i; break; }
+    }
+  }
+  if (colHeaderRow < 0) throw new Error('Could not find SPACE PROGRAM column headers in sheet "' + scSheet + '".');
+
+  var hdrs = rows[colHeaderRow].map(function(v) { return v ? String(v).toLowerCase().trim() : ''; });
+  var colIdx = {};
+  var COL_ALIASES = {
+    category:    ['category','cat'],
+    subcategory: ['subcategory','sub-category','sub category'],
+    name:        ['space name','name'],
+    type:        ['type'],
+    rule:        ['unit-based','multiplier-based','allocation rule','rule'],
+    seats:       ['seats'],
+    size:        ['size'],
+    quantity:    ['quantity','qty'],
+  };
+  Object.keys(COL_ALIASES).forEach(function(field) {
+    COL_ALIASES[field].forEach(function(alias) {
+      if (colIdx[field] !== undefined) return;
+      hdrs.forEach(function(h, ci) { if (h.includes(alias) && colIdx[field]===undefined) colIdx[field]=ci; });
+    });
+  });
+
+  var items = [];
+  var idxCounter = 0;
+  for (var ri = colHeaderRow+1; ri < rows.length; ri++) {
+    var row = rows[ri];
+    if (!row || row.every(function(v){return v===null;})) continue;
+    var cat = colIdx.category !== undefined ? (row[colIdx.category]||'') : '';
+    var name = colIdx.name !== undefined ? (row[colIdx.name]||'') : '';
+    if (!cat && !name) continue;
+    cat = String(cat).toLowerCase().trim();
+    if (!['me','we','support','amenity'].includes(cat)) continue;
+    if (!name || String(name).trim() === '') continue;
+
+    var qty  = colIdx.quantity !== undefined ? (parseInt(row[colIdx.quantity],10)||0) : 0;
+    var sz   = colIdx.size     !== undefined ? (parseInt(String(row[colIdx.size]).replace(/,/g,''),10)||0) : 0;
+    var seats= colIdx.seats    !== undefined ? (parseInt(row[colIdx.seats],10)||0) : 0;
+    var type = colIdx.type     !== undefined ? String(row[colIdx.type]||'support').toLowerCase().trim() : 'support';
+    if (!['open','enclosed','support','amenity'].includes(type)) type = cat === 'me'||cat==='we' ? 'open' : cat;
+    var sub  = colIdx.subcategory!==undefined ? String(row[colIdx.subcategory]||'').trim() : '';
+    // unit-based column may hold allocation rule text
+    var rule = '';
+    if (colIdx.rule !== undefined) {
+      var rv = row[colIdx.rule];
+      if (rv && String(rv).trim()) rule = String(rv).trim();
+    }
+
+    items.push({
+      id:   'f' + fileIdx + '_' + (idxCounter++),
+      cat:  cat,
+      sub:  sub,
+      name: String(name).trim(),
+      type: type,
+      qty:  qty,
+      size: sz,
+      seats:seats,
+      rule: rule || '—',
+      noCirc: false,
+    });
+  }
+
+  if (!items.length) throw new Error('No space rows found in sheet "' + scSheet + '". Check the export format.');
+  return { label: scenarioLabel, sub: scenarioSub, items: items };
+}
+
+/* ─── Launch app ─────────────────────────────────────────────────────────────────── */
+function launchApp() {
+  document.getElementById('import-screen').style.display = 'none';
+  document.getElementById('app-shell').style.display = '';
+
+  // Build tab bar
+  var tabBar = document.getElementById('tabBar');
+  var tabsHtml = '';
+  gState.scenarios.forEach(function(sc, idx) {
+    var letter = LETTERS[idx] || String(idx+1);
+    tabsHtml += '<button class="tab-btn' + (idx===0?' active':'') + '" data-sc="' + idx + '">' +
+      '<span class="scenario-badge">' + letter + '</span>' + sc.label + '</button>';
+  });
+  tabsHtml += '<button class="tab-btn tab-workshop" data-sc="W"><span class="scenario-badge">✦</span>Workshop</button>';
+  tabBar.insertAdjacentHTML('afterbegin', tabsHtml);
+  document.querySelectorAll('.tab-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() { switchScenario(btn.dataset.sc); });
+  });
+  document.querySelectorAll('.sf-opt').forEach(function(btn) {
+    btn.addEventListener('click', function() { switchSF(btn.dataset.sf); });
+  });
+  document.getElementById('assumptionsToggle').addEventListener('click', function() {
+    document.getElementById('assumptionsBar').classList.toggle('open');
+  });
+  document.getElementById('wbUndo').addEventListener('click', applyUndo);
+  document.getElementById('wbExport').addEventListener('click', exportWorkshop);
+  document.getElementById('wbReset').addEventListener('click', resetWorkshop);
+  document.getElementById('headerResetBtn').addEventListener('click', function() {
+    if (confirm('Return to the import screen? Your workshop changes will be lost.')) resetToImport();
+  });
+  bindAssumptions();
+
+  // Set header metadata
+  var projName = gState.projectName || 'Space Program';
+  document.getElementById('appTitle').textContent = projName;
+  document.getElementById('appMeta').innerHTML = '<div>Planning Year <strong>' + new Date().getFullYear() + '</strong></div>';
+
+  // Load first scenario
+  switchScenario('0');
+}
+
+function resetToImport() {
+  gState.scenarios = [];
+  gState.sc = null;
+  gState.items = [];
+  gState.workshopItems = null;
+  gState.workshopBaseline = null;
+  gState.undoStack = [];
+  // Remove dynamic tabs
+  document.querySelectorAll('.tab-btn').forEach(function(b) { b.remove(); });
+  // Clear file list
+  document.getElementById('fileList').innerHTML = '';
+  document.getElementById('launchBtn').disabled = true;
+  document.getElementById('importError').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+  loadedFiles = [];
+  parsedScenarios = [];
+  document.getElementById('import-screen').style.display = '';
+  document.getElementById('app-shell').style.display = 'none';
+}
+
+/* ─── File import UI ─────────────────────────────────────────────────────────────── */
+var loadedFiles = [];
+var parsedScenarios = [];
+
+function refreshFileList() {
+  var list = document.getElementById('fileList');
+  if (!loadedFiles.length) { list.innerHTML=''; return; }
+  list.innerHTML = loadedFiles.map(function(f, i) {
+    var statusClass = f.status === 'ok' ? 'status-ok' : f.status === 'err' ? 'status-err' : 'status-loading';
+    var statusText  = f.status === 'ok' ? '✓ Parsed' : f.status === 'err' ? '✗ Error' : 'Reading…';
+    return '<div class="file-pill" id="pill-'+i+'">' +
+      '<span class="file-pill-icon">📊</span>' +
+      '<div class="file-pill-info">' +
+        '<div class="file-pill-name">'+f.name+'</div>' +
+        (f.msg ? '<div class="file-pill-meta">'+f.msg+'</div>' : '') +
+      '</div>' +
+      '<span class="file-pill-status '+statusClass+'">'+statusText+'</span>' +
+      '<button class="file-pill-remove" data-idx="'+i+'" title="Remove">✕</button>' +
+    '</div>';
+  }).join('');
+  list.querySelectorAll('.file-pill-remove').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var idx = parseInt(btn.dataset.idx);
+      loadedFiles.splice(idx, 1);
+      parsedScenarios.splice(idx, 1);
+      refreshFileList();
+      checkLaunchReady();
+    });
+  });
+}
+
+function checkLaunchReady() {
+  var ok = parsedScenarios.filter(function(s){return s !== null;}).length > 0;
+  document.getElementById('launchBtn').disabled = !ok;
+  document.getElementById('importError').style.display = 'none';
+}
+
+function readFile(file, idx) {
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var wb = XLSX.read(e.target.result, { type: 'array' });
+      // Try to get project name from Project sheet
+      if (idx === 0 && wb.Sheets['Project']) {
+        var projRows = XLSX.utils.sheet_to_json(wb.Sheets['Project'], {header:1, defval:null});
+        projRows.forEach(function(row) {
+          if (row && row[0] && String(row[0]).toLowerCase().includes('project name') && row[1])
+            gState.projectName = String(row[1]).trim();
+        });
+      }
+      var sc = parseParameterFile(wb, idx);
+      parsedScenarios[idx] = sc;
+      loadedFiles[idx].status = 'ok';
+      loadedFiles[idx].msg = sc.items.length + ' space rows · ' + sc.label;
+    } catch(err) {
+      parsedScenarios[idx] = null;
+      loadedFiles[idx].status = 'err';
+      loadedFiles[idx].msg = err.message;
+    }
+    refreshFileList();
+    checkLaunchReady();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function handleFiles(files) {
+  var errEl = document.getElementById('importError');
+  if (files.length + loadedFiles.length > 4) {
+    errEl.textContent = 'Maximum 4 scenario files allowed.';
+    errEl.style.display = '';
+    return;
+  }
+  Array.from(files).forEach(function(file) {
+    if (loadedFiles.length >= 4) return;
+    var idx = loadedFiles.length;
+    loadedFiles.push({ name: file.name, status: 'loading', msg: '' });
+    parsedScenarios.push(null);
+    refreshFileList();
+    readFile(file, idx);
+  });
+}
+
+document.getElementById('fileInput').addEventListener('change', function(e) {
+  if (e.target.files.length) handleFiles(e.target.files);
+});
+
+var zone = document.getElementById('uploadZone');
+zone.addEventListener('dragover', function(e) { e.preventDefault(); zone.classList.add('dragover'); });
+zone.addEventListener('dragleave', function() { zone.classList.remove('dragover'); });
+zone.addEventListener('drop', function(e) {
+  e.preventDefault();
+  zone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+});
+
+document.getElementById('launchBtn').addEventListener('click', function() {
+  gState.scenarios = parsedScenarios.filter(function(s){return s !== null;});
+  if (!gState.scenarios.length) return;
+  launchApp();
+});
+</script>
+</body>
+</html>
