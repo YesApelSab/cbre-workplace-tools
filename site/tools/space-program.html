@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Space Program Viewer — CBRE Workplace Tools</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet">
 <style>
@@ -465,10 +466,59 @@ input[type=number]{-moz-appearance:textfield;}
 .wb-reset  { background:none; border:1.5px solid var(--border); border-radius:4px; color:var(--text-muted); font-size:10px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; padding:4px 10px; cursor:pointer; transition:border-color .15s,color .15s; }
 .wb-reset:hover { border-color:var(--text-muted); color:var(--text); }
 
+.btn-export-ppt {
+  flex-shrink: 0;
+  background: none;
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 13px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color .15s, color .15s;
+  white-space: nowrap;
+  align-self: center;
+}
+.btn-export-ppt:hover { border-color: var(--green); color: var(--green); }
+
+/* ── Scenario description inputs ─────────────────────────────────────────── */
+.sc-desc-section { max-width:640px; margin:20px auto 0; }
+.sc-desc-heading { font-size:12px; font-weight:600; color:var(--text-muted); margin-bottom:10px; }
+.sc-desc-list { display:flex; flex-direction:column; gap:8px; }
+.sc-desc-row { display:flex; align-items:center; gap:10px; background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:8px 12px; }
+.sc-desc-badge { width:26px; height:26px; display:flex; align-items:center; justify-content:center; background:var(--green-dark); color:var(--mint); font-family:'Syne',sans-serif; font-size:11px; font-weight:700; border-radius:4px; flex-shrink:0; }
+.sc-desc-name { font-size:12px; font-weight:500; color:var(--text); min-width:120px; max-width:160px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sc-desc-input { flex:1; border:none; border-bottom:1.5px solid var(--border); background:transparent; font-size:12px; color:var(--text); padding:2px 0; outline:none; font-family:'DM Sans',sans-serif; transition:border-color .15s; }
+.sc-desc-input:focus { border-color:var(--green); }
+.sc-desc-input::placeholder { color:var(--text-dim); }
+
+/* ── Current State section ───────────────────────────────────────────────── */
+.cs-toggle-row { max-width:640px; margin:20px auto 0; }
+.cs-toggle-label { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-muted); cursor:pointer; }
+.cs-toggle-label input[type=checkbox] { width:16px; height:16px; accent-color:var(--green); cursor:pointer; }
+.cs-section { max-width:640px; margin:12px auto 0; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:16px 18px; }
+.cs-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:12px 16px; }
+.cs-comp-grid { margin-top:12px; }
+.cs-comp-label { font-size:10px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--text-dim); margin-top:14px; margin-bottom:2px; }
+.cs-field { display:flex; flex-direction:column; gap:3px; }
+.cs-field label { font-size:10px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--text-muted); }
+.cs-field input { border:none; border-bottom:1.5px solid var(--border); background:transparent; font-size:13px; font-weight:500; color:var(--text); padding:3px 0; outline:none; font-family:'DM Sans',sans-serif; transition:border-color .15s; width:100%; }
+.cs-field input:focus { border-color:var(--green); }
+.cs-field input::placeholder { color:var(--text-dim); }
+
+/* ── GWOIR row ───────────────────────────────────────────────────────────── */
+.gwoir-row { max-width:640px; margin:18px auto 0; display:flex; align-items:center; gap:14px; }
+.gwoir-label { font-size:12px; color:var(--text-muted); white-space:nowrap; flex-shrink:0; }
+.gwoir-select { flex:1; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:var(--text); font-size:12px; font-family:'DM Sans',sans-serif; padding:6px 10px; outline:none; cursor:pointer; transition:border-color .15s; }
+.gwoir-select:focus { border-color:var(--green); }
+
 @media(max-width:700px){
   .header-top,.tab-bar,.assumptions-panel,.summary-strip,.main-content{padding-left:16px;padding-right:16px;}
   .stat-tiles{flex-wrap:wrap;}
   .stat-tile{flex:1 0 80px;}
+  .gwoir-row{flex-direction:column;align-items:flex-start;}
 }
 </style>
 </head>
@@ -529,6 +579,53 @@ input[type=number]{-moz-appearance:textfield;}
 
   <div class="file-list" id="fileList"></div>
   <div class="import-error" id="importError"></div>
+
+  <!-- Scenario descriptions (appear after parse) -->
+  <div class="sc-desc-section" id="scDescSection" style="display:none">
+    <div class="sc-desc-heading">Add a description for each scenario <span style="font-weight:400;color:var(--text-dim)">(optional — appears on the export slide)</span></div>
+    <div class="sc-desc-list" id="scDescList"></div>
+  </div>
+
+  <!-- Current State toggle -->
+  <div class="cs-toggle-row">
+    <label class="cs-toggle-label">
+      <input type="checkbox" id="csEnabled">
+      Include <strong>Current State</strong> for comparison
+    </label>
+  </div>
+  <div class="cs-section" id="csSection" style="display:none">
+    <div class="cs-grid">
+      <div class="cs-field"><label>Label</label><input type="text" id="csLabel" value="Current State" placeholder="e.g. Current State"></div>
+      <div class="cs-field"><label>Description</label><input type="text" id="csDesc" placeholder="Brief note on current setup"></div>
+      <div class="cs-field"><label>Planning HC</label><input type="number" id="csHC" value="" min="0" placeholder="—"></div>
+      <div class="cs-field"><label>Total USF</label><input type="number" id="csUSF" value="" min="0" placeholder="—"></div>
+      <div class="cs-field"><label>Total RSF</label><input type="number" id="csRSF" value="" min="0" placeholder="—"></div>
+      <div class="cs-field"><label>Ind. Seats</label><input type="number" id="csSeats" value="" min="0" placeholder="—"></div>
+    </div>
+    <div class="cs-comp-label">Space Composition (%) — optional</div>
+    <div class="cs-grid cs-comp-grid">
+      <div class="cs-field"><label>Me Space %</label><input type="number" id="csMeP" min="0" max="100" placeholder="—"></div>
+      <div class="cs-field"><label>We Space %</label><input type="number" id="csWeP" min="0" max="100" placeholder="—"></div>
+      <div class="cs-field"><label>Support %</label><input type="number" id="csSupP" min="0" max="100" placeholder="—"></div>
+      <div class="cs-field"><label>Amenity %</label><input type="number" id="csAmeP" min="0" max="100" placeholder="—"></div>
+    </div>
+  </div>
+
+  <!-- GWOIR sector -->
+  <div class="gwoir-row">
+    <label class="gwoir-label">GWOIR Benchmark sector <span style="font-weight:400;color:var(--text-dim)">(adds benchmark column to export)</span></label>
+    <select id="gwSector" class="gwoir-select">
+      <option value="">— None —</option>
+      <option>All Clients</option>
+      <option>Financial &amp; Professional Services</option>
+      <option>Technology, Media &amp; Telecom</option>
+      <option>Healthcare &amp; Life Sciences</option>
+      <option>Consumer Products &amp; Retail</option>
+      <option>Government &amp; Public Sector</option>
+      <option>Energy &amp; Natural Resources</option>
+      <option>Manufacturing &amp; Industrial</option>
+    </select>
+  </div>
 
   <div class="import-actions">
     <button class="btn-primary" id="launchBtn" disabled>View Program →</button>
@@ -614,6 +711,7 @@ input[type=number]{-moz-appearance:textfield;}
         <span class="legend-item"><span class="legend-dot dot-amenity"></span>Amenity <span class="legend-pct" id="pAme"></span></span>
       </div>
     </div>
+    <button class="btn-export-ppt" id="exportPptBtn">↓ Export PowerPoint</button>
   </div>
 
   <div class="main-content">
@@ -676,6 +774,24 @@ var gState = {
   undoStack: [],
   circOpen: 45, circEnclosed: 25, circSupport: 35, lossFactor: 10,
   projectName: '',
+  gwSector: '',        // GWOIR sector key ('' = none)
+  csEnabled: false,    // Current State column in export
+  cs: { label:'Current State', desc:'', hc:'', usf:'', rsf:'', seats:'', meP:'', weP:'', supP:'', ameP:'' },
+};
+
+/* ─── GWOIR Benchmark data ───────────────────────────────────────────────────── */
+var BM = {
+  v:'2026 GWOIR',
+  s:{
+    'All Clients':                    {c:{me:0.35,we:0.19,su:0.24,am:0.22},d:{ss:190,sp:158}},
+    'Financial & Professional Services':{c:{me:0.42,we:0.18,su:0.22,am:0.18},d:{ss:195,sp:165}},
+    'Technology, Media & Telecom':    {c:{me:0.32,we:0.22,su:0.23,am:0.23},d:{ss:175,sp:145}},
+    'Healthcare & Life Sciences':     {c:{me:0.38,we:0.17,su:0.26,am:0.19},d:{ss:200,sp:170}},
+    'Consumer Products & Retail':     {c:{me:0.34,we:0.20,su:0.24,am:0.22},d:{ss:185,sp:155}},
+    'Government & Public Sector':     {c:{me:0.45,we:0.15,su:0.25,am:0.15},d:{ss:210,sp:180}},
+    'Energy & Natural Resources':     {c:{me:0.40,we:0.17,su:0.25,am:0.18},d:{ss:205,sp:175}},
+    'Manufacturing & Industrial':     {c:{me:0.37,we:0.16,su:0.28,am:0.19},d:{ss:200,sp:168}},
+  }
 };
 
 const CATS = [
@@ -1009,6 +1125,269 @@ function bindAssumptions() {
 }
 
 /* ─── Export ────────────────────────────────────────────────────────────────────── */
+function calcTotalsForItems(items) {
+  var cats = {};
+  CATS.forEach(function(c) { cats[c.key] = {nsf:0,usf:0,rsf:0,seats:0,primarySeats:0,wseats:0}; });
+  items.forEach(function(item) {
+    var r = calcRow(item);
+    var c = cats[item.cat]; if (!c) return;
+    c.nsf += r.nsf; c.usf += r.usf; c.rsf += r.rsf;
+    if (item.cat === 'me') {
+      c.seats += (item.qty||0)*(item.seats||0);
+      if (item.sub !== 'Alternative') c.primarySeats += (item.qty||0)*(item.seats||0);
+    }
+    if (item.cat === 'we') c.wseats += (item.qty||0)*(item.seats||0);
+  });
+  return cats;
+}
+
+function exportPowerPoint() {
+  if (!window.PptxGenJS) { alert('PowerPoint library not yet loaded — please try again in a moment.'); return; }
+  var pptx = new PptxGenJS();
+  pptx.layout = 'LAYOUT_WIDE'; // 10" × 7.5"
+
+  var C = {
+    gd:'003F2D', mint:'17E88F',
+    w:'FFFFFF',  bg:'F4F7F5', card:'EEF3F0',
+    text:'1A2620', muted:'5A706A', dim:'9DB5AE',
+    me:'1D4E89', we:'2E7D32', sup:'8B6914', ame:'7B2D8B',
+    border:'D0DDD7',
+    // scenario accent colors (0-3)
+    acc:['538184','2E7D32','8B5E14','7B2D8B'],
+  };
+  var RECT = 'rect';
+  var projName = gState.projectName || 'Space Program';
+  var dateStr  = new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  var scenarios = gState.scenarios;
+  var cs  = gState.cs;
+  var bm  = gState.gwSector && BM.s[gState.gwSector] ? BM.s[gState.gwSector] : null;
+
+  // Helper — shared header bar
+  function hdrBar(sld, title) {
+    sld.addShape(RECT,{x:0,y:0,w:10,h:1.05,fill:{color:C.gd},line:{type:'none'}});
+    sld.addShape(RECT,{x:0,y:1.05,w:10,h:0.035,fill:{color:C.mint},line:{type:'none'}});
+    sld.addText('CBRE WORKPLACE CONSULTING  ·  CONFIDENTIAL',{x:0.4,y:0.1,w:9.2,h:0.22,fontSize:7.5,color:C.dim,fontFace:'Arial',bold:true,charSpacing:2});
+    sld.addText(title,{x:0.4,y:0.3,w:8,h:0.52,fontSize:20,color:C.w,fontFace:'Arial',bold:true});
+    sld.addText(projName+' · '+dateStr,{x:0.4,y:0.83,w:9.2,h:0.2,fontSize:7.5,color:C.dim,fontFace:'Arial',align:'right'});
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     SLIDE 1 — Scenario Overview (cards + assumption chips)
+  ══════════════════════════════════════════════════════════════════════════ */
+  var s1 = pptx.addSlide();
+  hdrBar(s1, 'Scenario Overview');
+
+  // Assumption chips row
+  var chips = [
+    {l:'Circ. Open',     v:gState.circOpen+'%'},
+    {l:'Circ. Enclosed', v:gState.circEnclosed+'%'},
+    {l:'Circ. Support',  v:gState.circSupport+'%'},
+    {l:'Loss Factor',    v:gState.lossFactor+'%'},
+  ];
+  var cW=1.8, cH=0.42, cY=1.18, cX=0.4;
+  chips.forEach(function(ch,ci) {
+    var cx = cX + ci*(cW+0.12);
+    s1.addShape(RECT,{x:cx,y:cY,w:cW,h:cH,fill:{color:C.card},line:{type:'none'},rectRadius:0.04});
+    s1.addText(ch.v,{x:cx,y:cY+0.04,w:cW,h:0.22,fontSize:12,color:C.gd,fontFace:'Arial',bold:true,align:'center'});
+    s1.addText(ch.l.toUpperCase(),{x:cx,y:cY+0.24,w:cW,h:0.16,fontSize:6.5,color:C.muted,fontFace:'Arial',align:'center',charSpacing:1.2});
+  });
+
+  // Build column list: [CS if enabled, ...scenarios]
+  var cols = [];
+  if (gState.csEnabled) {
+    cols.push({type:'cs', label:cs.label||'Current State', desc:cs.desc||'', accent:'7A8C87'});
+  }
+  scenarios.forEach(function(sc,i) {
+    cols.push({type:'sc', idx:i, label:sc.label, desc:sc.sub||'', accent:C.acc[i]||C.acc[3]});
+  });
+
+  var nCols = cols.length;
+  var cardY = 1.78, cardH = 5.5;
+  var cardTotalW = 9.2;
+  var cardGap = 0.12;
+  var cWd = (cardTotalW - cardGap*(nCols-1)) / nCols;
+
+  cols.forEach(function(col, ci) {
+    var cx = 0.4 + ci*(cWd+cardGap);
+    // Card background
+    s1.addShape(RECT,{x:cx,y:cardY,w:cWd,h:cardH,fill:{color:C.w},line:{color:C.border,pt:0.75},rectRadius:0.06});
+    // Color top stripe
+    s1.addShape(RECT,{x:cx,y:cardY,w:cWd,h:0.18,fill:{color:col.accent},line:{type:'none'},rectRadius:0.06});
+    s1.addShape(RECT,{x:cx,y:cardY+0.08,w:cWd,h:0.1,fill:{color:col.accent},line:{type:'none'}});
+
+    // Badge & name
+    var badgeLabel = col.type==='cs' ? 'CS' : (LETTERS[col.idx]||String(col.idx+1));
+    s1.addShape(RECT,{x:cx+0.1,y:cardY+0.26,w:0.28,h:0.28,fill:{color:col.accent},line:{type:'none'},rectRadius:0.03});
+    s1.addText(badgeLabel,{x:cx+0.1,y:cardY+0.26,w:0.28,h:0.28,fontSize:9,color:C.w,fontFace:'Arial',bold:true,align:'center',valign:'middle'});
+    var nameW = cWd-0.22;
+    s1.addText(col.label,{x:cx+0.1,y:cardY+0.58,w:nameW,h:0.38,fontSize:10,color:C.text,fontFace:'Arial',bold:true,wrap:true});
+
+    // Description
+    if (col.desc) {
+      s1.addText(col.desc,{x:cx+0.1,y:cardY+0.98,w:nameW,h:0.38,fontSize:7.5,color:C.muted,fontFace:'Arial',italic:true,wrap:true});
+    }
+
+    // Stats
+    var statY = cardY+1.42;
+    var statItems;
+    if (col.type === 'cs') {
+      var usf=parseInt(cs.usf)||0, rsf=parseInt(cs.rsf)||0, seats=parseInt(cs.seats)||0;
+      statItems = [
+        {l:'Total USF',   v:usf?fmt(usf):'—'},
+        {l:'Total RSF',   v:rsf?fmt(rsf):'—'},
+        {l:'USF / Seat',  v:(usf&&seats)?fmt(Math.round(usf/seats)):'—'},
+        {l:'RSF / Seat',  v:(rsf&&seats)?fmt(Math.round(rsf/seats)):'—'},
+        {l:'Ind. Seats',  v:seats?fmt(seats):'—'},
+        {l:'Planning HC', v:cs.hc?fmt(parseInt(cs.hc)):'—'},
+      ];
+    } else {
+      var cats = calcTotalsForItems(col.type==='sc'?scenarios[col.idx].items:[]);
+      var tUSF = Object.keys(cats).reduce(function(a,k){return a+cats[k].usf;},0);
+      var tRSF = Object.keys(cats).reduce(function(a,k){return a+cats[k].rsf;},0);
+      var ps=cats.me.primarySeats, ws=cats.we.wseats;
+      statItems = [
+        {l:'Total USF',   v:fmt(tUSF)},
+        {l:'Total RSF',   v:fmt(tRSF)},
+        {l:'USF / Seat',  v:ps?fmt(Math.round(tUSF/ps)):'—'},
+        {l:'RSF / Seat',  v:ps?fmt(Math.round(tRSF/ps)):'—'},
+        {l:'Ind. Seats',  v:fmt(cats.me.seats)},
+        {l:'Collab Ratio',v:ps?(ws/ps).toFixed(1)+':1':'—'},
+      ];
+    }
+    statItems.forEach(function(st,si) {
+      var sy = statY + si*0.62;
+      s1.addShape(RECT,{x:cx+0.1,y:sy,w:cWd-0.2,h:0.55,fill:{color:C.card},line:{type:'none'},rectRadius:0.03});
+      s1.addText(st.v,{x:cx+0.12,y:sy+0.04,w:cWd-0.24,h:0.28,fontSize:13,color:C.text,fontFace:'Arial',bold:true,align:'right'});
+      s1.addText(st.l.toUpperCase(),{x:cx+0.12,y:sy+0.33,w:cWd-0.24,h:0.16,fontSize:6,color:C.muted,fontFace:'Arial',align:'right',charSpacing:0.8});
+    });
+  });
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     SLIDE 2 — Comparison Table
+  ══════════════════════════════════════════════════════════════════════════ */
+  var s2 = pptx.addSlide();
+  hdrBar(s2, 'Scenario Comparison');
+
+  // Build column data objects
+  var tblCols = [];
+  if (gState.csEnabled) {
+    var cusf=parseInt(cs.usf)||0, crsf=parseInt(cs.rsf)||0, cseats=parseInt(cs.seats)||0;
+    tblCols.push({
+      label: cs.label||'Current State', accent:'7A8C87',
+      usf:cusf, rsf:crsf, seats:cseats,
+      usfSeat: (cusf&&cseats)?Math.round(cusf/cseats):null,
+      rsfSeat: (crsf&&cseats)?Math.round(crsf/cseats):null,
+      collab: null,
+      meP: parseFloat(cs.meP)||null,
+      weP: parseFloat(cs.weP)||null,
+      supP:parseFloat(cs.supP)||null,
+      ameP:parseFloat(cs.ameP)||null,
+    });
+  }
+  scenarios.forEach(function(sc,i) {
+    var cats = calcTotalsForItems(sc.items);
+    var tUSF = Object.keys(cats).reduce(function(a,k){return a+cats[k].usf;},0);
+    var tRSF = Object.keys(cats).reduce(function(a,k){return a+cats[k].rsf;},0);
+    var ps=cats.me.primarySeats, ws=cats.we.wseats, base=tUSF||1;
+    tblCols.push({
+      label: (LETTERS[i]||String(i+1))+' – '+sc.label, accent:C.acc[i]||C.acc[3],
+      usf:tUSF, rsf:tRSF, seats:cats.me.seats,
+      usfSeat: ps?Math.round(tUSF/ps):null,
+      rsfSeat: ps?Math.round(tRSF/ps):null,
+      collab:  ps?(ws/ps).toFixed(1)+':1':null,
+      meP:  Math.round(cats.me.usf/base*100),
+      weP:  Math.round(cats.we.usf/base*100),
+      supP: Math.round(cats.support.usf/base*100),
+      ameP: Math.round(cats.amenity.usf/base*100),
+    });
+  });
+  if (bm) {
+    tblCols.push({
+      label:'GWOIR Benchmark\n'+gState.gwSector, accent:'003F2D',
+      usf:null, rsf:null,
+      usfSeat: bm.d.sp, rsfSeat: bm.d.ss,
+      seats:null, collab:null,
+      meP: Math.round(bm.c.me*100), weP:Math.round(bm.c.we*100),
+      supP:Math.round(bm.c.su*100), ameP:Math.round(bm.c.am*100),
+    });
+  }
+
+  var nTC = tblCols.length;
+  var labelW = 2.0;
+  var dataW  = (9.2 - labelW) / nTC;
+
+  // Helper — table cell option shorthand
+  function tc(txt,opts) { return {text:String(txt||'—'),options:opts}; }
+
+  // Section rows
+  var SECTION = function(label) {
+    var cells = [tc(label,{bold:true,color:C.w,fill:C.gd,fontSize:8.5,fontFace:'Arial',colspan:1+nTC,align:'left',paraSpaceBefore:2,paraSpaceAfter:2})];
+    return cells;
+  };
+  var ROW = function(label, vals, opts) {
+    var def = {fontSize:9,fontFace:'Arial',align:'right',color:C.text};
+    var cells = [tc(label,Object.assign({},def,{align:'left',color:C.muted,fill:C.bg}))];
+    vals.forEach(function(v,vi) {
+      var col = tblCols[vi];
+      var fill = vi===nTC-1 && bm ? 'EEF8F3' : (vi%2===0?C.w:C.bg);
+      cells.push(tc(v!==null&&v!==undefined?v:'—',Object.assign({fill:fill},def,opts||{})));
+    });
+    return cells;
+  };
+
+  // Build rows
+  var rows = [];
+
+  // Header row
+  var hdrCells = [tc('',{fill:C.gd,fontSize:8,fontFace:'Arial',bold:true})];
+  tblCols.forEach(function(col,ci) {
+    var isBM = bm && ci===nTC-1;
+    hdrCells.push(tc(col.label,{
+      fill: isBM ? C.gd : col.accent,
+      color:C.w, fontSize:8, fontFace:'Arial', bold:true, align:'center', valign:'bottom',
+    }));
+  });
+  rows.push(hdrCells);
+
+  // Area Summary
+  rows.push(SECTION('AREA SUMMARY'));
+  rows.push(ROW('Total USF', tblCols.map(function(c){return c.usf!==null?fmt(c.usf):null;})));
+  rows.push(ROW('Total RSF', tblCols.map(function(c){return c.rsf!==null?fmt(c.rsf):null;})));
+
+  // Seating
+  rows.push(SECTION('SEATING'));
+  rows.push(ROW('Individual Seats',   tblCols.map(function(c){return c.seats!==null?fmt(c.seats):null;})));
+  rows.push(ROW('USF / Seat',  tblCols.map(function(c){return c.usfSeat!==null?fmt(c.usfSeat):null;})));
+  rows.push(ROW('RSF / Seat',  tblCols.map(function(c){return c.rsfSeat!==null?fmt(c.rsfSeat):null;})));
+  rows.push(ROW('Collab Ratio',tblCols.map(function(c){return c.collab;})));
+
+  // Composition
+  rows.push(SECTION('SPACE COMPOSITION (USF)'));
+  rows.push(ROW('Me Space %',  tblCols.map(function(c){return c.meP!==null?c.meP+'%':null;}),{color:C.me,bold:true}));
+  rows.push(ROW('We Space %',  tblCols.map(function(c){return c.weP!==null?c.weP+'%':null;}),{color:C.we,bold:true}));
+  rows.push(ROW('Support %',   tblCols.map(function(c){return c.supP!==null?c.supP+'%':null;}),{color:C.sup,bold:true}));
+  rows.push(ROW('Amenity %',   tblCols.map(function(c){return c.ameP!==null?c.ameP+'%':null;}),{color:C.ame,bold:true}));
+
+  // Column widths
+  var colW = [labelW];
+  tblCols.forEach(function(){colW.push(dataW);});
+
+  s2.addTable(rows, {
+    x:0.4, y:1.22, w:9.2,
+    fontSize:9, fontFace:'Arial',
+    border:{pt:0.5,color:C.border},
+    colW:colW,
+    rowH:0.29,
+  });
+
+  // GWOIR footnote
+  if (bm) {
+    s2.addText('* GWOIR '+BM.v+' — '+gState.gwSector,{x:0.4,y:7.15,w:9.2,h:0.2,fontSize:7,color:C.muted,fontFace:'Arial',italic:true});
+  }
+
+  pptx.writeFile({fileName:(projName||'Space Program')+' — Scenario Comparison.pptx'});
+}
+
 function exportWorkshop() {
   var CAT_LABEL = { me:'Me Space', we:'We Space', support:'Support', amenity:'Amenity' };
   var rows = [['Category','Sub-Category','Space Name','Type','Allocation Rule','Qty','Unit NSF','Total NSF','Total USF','Total RSF']];
@@ -1080,38 +1459,59 @@ function parseParameterFile(wb, fileIdx) {
     });
   }
 
-  // Find SPACE PROGRAM header row
+  // Find SPACE PROGRAM section header row (optional — some exports omit it)
   var spHeaderRow = -1;
   rows.forEach(function(row, ri) {
     if (row && row[0] && String(row[0]).toUpperCase().includes('SPACE PROGRAM')) spHeaderRow = ri;
   });
 
-  // Find column header row just after SPACE PROGRAM
+  // Find column header row — look just after SPACE PROGRAM first, then fall back to whole sheet
+  function rowHasCategoryCol(row) {
+    return row && row.some(function(v) {
+      if (!v) return false;
+      var s = String(v).toLowerCase().trim();
+      return s === 'category' || s === 'cat' || s === 'space category';
+    });
+  }
   var colHeaderRow = -1;
   if (spHeaderRow >= 0) {
-    for (var i = spHeaderRow+1; i < Math.min(spHeaderRow+5, rows.length); i++) {
-      if (rows[i] && rows[i].some(function(v) { return v && String(v).toLowerCase().includes('category'); }))
-        { colHeaderRow = i; break; }
+    for (var i = spHeaderRow+1; i < Math.min(spHeaderRow+6, rows.length); i++) {
+      if (rowHasCategoryCol(rows[i])) { colHeaderRow = i; break; }
     }
   }
-  if (colHeaderRow < 0) throw new Error('Could not find SPACE PROGRAM column headers in sheet "' + scSheet + '".');
+  if (colHeaderRow < 0) {
+    for (var i = 0; i < rows.length; i++) {
+      if (rowHasCategoryCol(rows[i])) { colHeaderRow = i; break; }
+    }
+  }
+  if (colHeaderRow < 0) throw new Error('Could not find column headers in sheet "' + scSheet + '". Expected a "Category" column. Check that this is a Parameter space program export.');
 
   var hdrs = rows[colHeaderRow].map(function(v) { return v ? String(v).toLowerCase().trim() : ''; });
   var colIdx = {};
+  // Each alias list is checked in priority order; exact-match aliases listed first prevent substring collisions.
   var COL_ALIASES = {
-    category:    ['category','cat'],
-    subcategory: ['subcategory','sub-category','sub category'],
+    category:    ['space category','category','cat'],
+    subcategory: ['sub-category','sub category','space sub-category','subcategory'],
     name:        ['space name','name'],
-    type:        ['type'],
-    rule:        ['unit-based','multiplier-based','allocation rule','rule'],
-    seats:       ['seats'],
-    size:        ['size'],
-    quantity:    ['quantity','qty'],
+    type:        ['space type','type'],
+    rule:        ['allocation rule','unit-based','multiplier-based','rule','allocation'],
+    seats:       ['seat count','seats','occupancy'],
+    size:        ['unit nsf','nsf per unit','unit size','area','size'],
+    quantity:    ['quantity','qty','count','number'],
   };
   Object.keys(COL_ALIASES).forEach(function(field) {
     COL_ALIASES[field].forEach(function(alias) {
       if (colIdx[field] !== undefined) return;
-      hdrs.forEach(function(h, ci) { if (h.includes(alias) && colIdx[field]===undefined) colIdx[field]=ci; });
+      // Use exact match first, then substring — prevents "subcategory" matching "category" alias
+      hdrs.forEach(function(h, ci) {
+        if (colIdx[field] !== undefined) return;
+        if (h === alias || h.startsWith(alias + ' ') || h.endsWith(' ' + alias) || h.includes(' ' + alias + ' ')) colIdx[field] = ci;
+      });
+      if (colIdx[field] !== undefined) return;
+      hdrs.forEach(function(h, ci) {
+        if (colIdx[field] !== undefined) return;
+        if (h.includes(alias)) colIdx[field] = ci;
+      });
     });
   });
 
@@ -1161,7 +1561,7 @@ function parseParameterFile(wb, fileIdx) {
 /* ─── Launch app ─────────────────────────────────────────────────────────────────── */
 function launchApp() {
   document.getElementById('import-screen').style.display = 'none';
-  document.getElementById('app-shell').style.display = '';
+  document.getElementById('app-shell').style.display = 'block';
 
   // Build tab bar
   var tabBar = document.getElementById('tabBar');
@@ -1185,6 +1585,7 @@ function launchApp() {
   document.getElementById('wbUndo').addEventListener('click', applyUndo);
   document.getElementById('wbExport').addEventListener('click', exportWorkshop);
   document.getElementById('wbReset').addEventListener('click', resetWorkshop);
+  document.getElementById('exportPptBtn').addEventListener('click', exportPowerPoint);
   document.getElementById('headerResetBtn').addEventListener('click', function() {
     if (confirm('Return to the import screen? Your workshop changes will be lost.')) resetToImport();
   });
@@ -1210,6 +1611,8 @@ function resetToImport() {
   document.querySelectorAll('.tab-btn').forEach(function(b) { b.remove(); });
   // Clear file list
   document.getElementById('fileList').innerHTML = '';
+  document.getElementById('scDescSection').style.display = 'none';
+  document.getElementById('scDescList').innerHTML = '';
   document.getElementById('launchBtn').disabled = true;
   document.getElementById('importError').style.display = 'none';
   document.getElementById('fileInput').value = '';
@@ -1225,7 +1628,7 @@ var parsedScenarios = [];
 
 function refreshFileList() {
   var list = document.getElementById('fileList');
-  if (!loadedFiles.length) { list.innerHTML=''; return; }
+  if (!loadedFiles.length) { list.innerHTML=''; refreshDescSection(); return; }
   list.innerHTML = loadedFiles.map(function(f, i) {
     var statusClass = f.status === 'ok' ? 'status-ok' : f.status === 'err' ? 'status-err' : 'status-loading';
     var statusText  = f.status === 'ok' ? '✓ Parsed' : f.status === 'err' ? '✗ Error' : 'Reading…';
@@ -1246,6 +1649,31 @@ function refreshFileList() {
       parsedScenarios.splice(idx, 1);
       refreshFileList();
       checkLaunchReady();
+    });
+  });
+  refreshDescSection();
+  list.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function refreshDescSection() {
+  var sec = document.getElementById('scDescSection');
+  var dl  = document.getElementById('scDescList');
+  var parsed = parsedScenarios.filter(function(s){return s;});
+  if (!parsed.length) { sec.style.display='none'; return; }
+  sec.style.display = '';
+  dl.innerHTML = parsedScenarios.map(function(sc, i) {
+    if (!sc) return '';
+    var letter = LETTERS[i] || String(i+1);
+    return '<div class="sc-desc-row">' +
+      '<span class="sc-desc-badge">'+letter+'</span>' +
+      '<span class="sc-desc-name" title="'+sc.label+'">'+sc.label+'</span>' +
+      '<input class="sc-desc-input" type="text" data-idx="'+i+'" placeholder="Describe this scenario…" value="'+(sc.sub||'').replace(/"/g,'&quot;')+'">' +
+    '</div>';
+  }).join('');
+  dl.querySelectorAll('.sc-desc-input').forEach(function(inp) {
+    inp.addEventListener('input', function() {
+      var idx = parseInt(inp.dataset.idx);
+      if (parsedScenarios[idx]) parsedScenarios[idx].sub = inp.value;
     });
   });
 }
@@ -1305,6 +1733,32 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
   if (e.target.files.length) handleFiles(e.target.files);
 });
 
+// Current State toggle
+document.getElementById('csEnabled').addEventListener('change', function() {
+  gState.csEnabled = this.checked;
+  document.getElementById('csSection').style.display = this.checked ? '' : 'none';
+});
+
+// GWOIR sector
+document.getElementById('gwSector').addEventListener('change', function() {
+  gState.gwSector = this.value;
+});
+
+// Read CS fields into gState before launch
+function syncCSState() {
+  var g = gState.cs;
+  g.label  = document.getElementById('csLabel').value.trim()  || 'Current State';
+  g.desc   = document.getElementById('csDesc').value.trim();
+  g.hc     = document.getElementById('csHC').value;
+  g.usf    = document.getElementById('csUSF').value;
+  g.rsf    = document.getElementById('csRSF').value;
+  g.seats  = document.getElementById('csSeats').value;
+  g.meP    = document.getElementById('csMeP').value;
+  g.weP    = document.getElementById('csWeP').value;
+  g.supP   = document.getElementById('csSupP').value;
+  g.ameP   = document.getElementById('csAmeP').value;
+}
+
 var zone = document.getElementById('uploadZone');
 zone.addEventListener('dragover', function(e) { e.preventDefault(); zone.classList.add('dragover'); });
 zone.addEventListener('dragleave', function() { zone.classList.remove('dragover'); });
@@ -1317,6 +1771,8 @@ zone.addEventListener('drop', function(e) {
 document.getElementById('launchBtn').addEventListener('click', function() {
   gState.scenarios = parsedScenarios.filter(function(s){return s !== null;});
   if (!gState.scenarios.length) return;
+  syncCSState();
+  gState.gwSector = document.getElementById('gwSector').value;
   launchApp();
 });
 </script>
