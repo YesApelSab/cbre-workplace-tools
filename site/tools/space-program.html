@@ -1416,6 +1416,15 @@ function exportWorkshop() {
 }
 
 /* ─── Parse Parameter Excel ─────────────────────────────────────────────────────── */
+// Smart percentage parser: handles both 0.45 (decimal fraction) and 45 (integer %)
+function pPct(v, def) {
+  var n = parseFloat(v);
+  if (isNaN(n)) return def;
+  // Values > 1 are already whole-number percentages (e.g. 45, 25, 10)
+  // Values ≤ 1 are decimal fractions that need ×100 (e.g. 0.45, 0.25, 0.10)
+  return n > 1 ? Math.round(n) : Math.round(n * 100);
+}
+
 function parseParameterFile(wb, fileIdx) {
   // Find the scenario sheet — not Project, Program_Summary, Glossary
   var reservedSheets = ['project','program_summary','glossary'];
@@ -1439,11 +1448,11 @@ function parseParameterFile(wb, fileIdx) {
     var v = row[1];
     if (k === 'name' && v) scenarioLabel = String(v);
     if (k === 'description' && v) scenarioSub = String(v);
-    if (k === 'circulation factor open' && v !== null)       circOpenVal    = parseFloat(v)*100 || 45;
-    if (k === 'circulation factor enclosed' && v !== null)   circEnclosedVal= parseFloat(v)*100 || 25;
+    if (k === 'circulation factor open' && v !== null)       circOpenVal    = pPct(v, 45);
+    if (k === 'circulation factor enclosed' && v !== null)   circEnclosedVal= pPct(v, 25);
     if ((k === 'circulation factor amenity/support' || k === 'circulation factor support') && v !== null)
-      circSupportVal = parseFloat(v)*100 || 35;
-    if (k === 'loss factor' && v !== null) lossFactorVal = parseFloat(v)*100 || 10;
+      circSupportVal = pPct(v, 35);
+    if (k === 'loss factor' && v !== null) lossFactorVal = pPct(v, 10);
   });
 
   // Use first file's assumptions as default
