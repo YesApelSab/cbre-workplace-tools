@@ -1592,10 +1592,10 @@ function stackedBar(label, d, t, a, lblClass, orgAvg) {
 function supplyBar(label, c) {
   if (!c.t) return `<div class="bar-row"><span class="bar-label">${label}</span><span style="font-size:0.72rem;color:var(--text-muted)">No data</span></div>`;
   const segData = [
-    {w:pct(c.n,c.t), color:'#CAD1D3', name:'None',         textColor:'rgba(0,0,0,0.7)'},
+    {w:pct(c.n,c.t), color:'#8B1A1A', name:'None',         textColor:'rgba(255,255,255,0.9)'},
     {w:pct(c.l,c.t), color:'#D2785A', name:'Too little',   textColor:'rgba(0,0,0,0.7)'},
     {w:pct(c.r,c.t), color:'#17E88F', name:'Right amount', textColor:'rgba(0,0,0,0.7)'},
-    {w:pct(c.m,c.t), color:'#DBD99A', name:'Too much',     textColor:'rgba(0,0,0,0.7)'},
+    {w:pct(c.m,c.t), color:'#003F2D', name:'Too much',     textColor:'rgba(255,255,255,0.9)'},
   ];
   const track = buildStackedTrack(segData);
   return `<div class="bar-row"><span class="bar-label" title="${label}">${label}</span>${track}</div>`;
@@ -1663,15 +1663,15 @@ function renderDemo() {
   const COLS = [
     { col:C.DEPT,    label:qLabel(C.DEPT,    'Department'),                    order:null },
     { col:C.ROLE,    label:qLabel(C.ROLE,    'Role'),                          order:['Leader of Leaders','Leader of ICs','Individual Contributor'] },
-    { col:C.GEN,     label:qLabel(C.GEN,     'Generation'),                    order:['Born 1997 or after','Born 1981–1996','Born 1965–1980','Born before 1965','Prefer not to say'] },
-    { col:C.TENURE,  label:qLabel(C.TENURE,  'Tenure'),                        order:['Less than 1 year','1–2 years','3–5 years','6–10 years','10+ years'] },
-    { col:C.FREQOFF, label:qLabel(C.FREQOFF, 'Office Frequency'),              order:['Never (fully remote)','Less than one day per week','1 day per week','2–3 days per week','4 days per week','Every day (5 days per week)'] },
+    { col:C.GEN,     label:qLabel(C.GEN,     'Generation'),                    order:null },
+    { col:C.TENURE,  label:qLabel(C.TENURE,  'Tenure'),                        order:null },
+    { col:C.FREQOFF, label:qLabel(C.FREQOFF, 'Office Frequency'),              order:null },
     { col:C.WKSCHED, label:qLabel(C.WKSCHED, 'Weekly Schedule Type'),         order:null },
     { col:C.TLOCAL,  label:qLabel(C.TLOCAL,  'Same Office as Majority of Team'), order:['Yes','No'] },
     { col:C.MLOCAL,  label:qLabel(C.MLOCAL,  'Same Office as Direct Manager'),   order:['Yes','No'] },
     { col:C.Q11,     label:qLabel(C.Q11,     'Has Assigned Workspace'),        order:['Yes','No'] },
     { col:C.Q12,     label:qLabel(C.Q12,     'Assigned Workspace Type'),       order:null },
-    { col:C.COMMUTE, label:qLabel(C.COMMUTE, 'One-Way Commute Time'),          order:['0–15 minutes','15–30 minutes','30–45 minutes','45–60 minutes','60+ minutes'] },
+    { col:C.COMMUTE, label:qLabel(C.COMMUTE, 'One-Way Commute Time'),          order:null },
     { col:C.Q15,     label:qLabel(C.Q15,     'Primary Commute Mode'),          order:null },
   ];
   const PAL = ['#17E88F','#0FB870','#80BBAD','#538184','#003F2D','#DBD99A','#D2785A','#CAD1D3','#012A2D'];
@@ -1683,6 +1683,8 @@ function renderDemo() {
     let ents = Object.entries(counts);
     if (order) ents.sort((a,b) => { const ai=order.indexOf(a[0]),bi=order.indexOf(b[0]); return (ai<0?99:ai)-(bi<0?99:bi); });
     else ents.sort((a,b) => b[1]-a[1]);
+    const PNTS = /prefer not (to say|to answer)/i;
+    ents.sort((a,b) => (PNTS.test(a[0])?1:0) - (PNTS.test(b[0])?1:0));
     const tot = ents.reduce((s,e) => s+e[1], 0);
     let bars = ents.map(([v,n],i) => {
       const w = pct(n,tot);
@@ -1764,10 +1766,10 @@ function renderSpace() {
     <div class="stacked-chart">`;
   supplyChartItems.forEach(d => html += supplyBar(d.label, d));
   html += `</div><div class="chart-legend">
-    <div class="legend-item"><div class="legend-dot" style="background:#CAD1D3"></div>None</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#8B1A1A"></div>None</div>
     <div class="legend-item"><div class="legend-dot" style="background:#D2785A"></div>Too little</div>
     <div class="legend-item"><div class="legend-dot" style="background:#17E88F"></div>Right amount</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#DBD99A"></div>Too much</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#003F2D"></div>Too much</div>
   </div></div>`;
 
   // Functionality
@@ -1838,26 +1840,24 @@ function renderSpace() {
     html += `<div class="two-col">`;
     if (Object.keys(lunFreqCounts).length) html += `<div class="chart-card"><div class="chart-card-title">Lunch Frequency</div>${barSet(lunFreqCounts)}</div>`;
     if (Object.keys(lunLocCounts).length) html += `<div class="chart-card"><div class="chart-card-title">Where Employees Eat</div>${barSet(lunLocCounts)}</div>`;
-    html += `</div>`;
-  }
-
-  // Tech & Space Needs
-  const techCounts = countBy(rows, C.TECHNEED);
-  if (Object.keys(techCounts).length) {
-    const techEnts = Object.entries(techCounts).sort((a,b)=>b[1]-a[1]);
-    const techTot = techEnts.reduce((s,[,n])=>s+n,0);
-    const PAL = ['#17E88F','#80BBAD','#538184'];
-    html += `<div class="chart-card"><div class="chart-card-title">Technology & Space Needs</div>`;
-    techEnts.forEach(([v,n],i)=>{
-      const w=pct(n,techTot);
-      html += `<div class="h-bar-row" style="margin-bottom:0.35rem">
-        <span style="font-size:0.74rem;color:var(--text);width:200px;min-width:200px;max-width:200px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${v}">${v}</span>
-        <div style="width:200px;flex-shrink:0;height:20px;background:var(--card-border);border-radius:4px;overflow:hidden;">
-          <div style="height:100%;width:${w}%;background:${PAL[i%PAL.length]};border-radius:4px;"></div>
-        </div>
-        <span style="font-size:0.72rem;color:var(--text-muted);min-width:60px;text-align:right">${n} (${w}%)</span>
-      </div>`;
-    });
+    // Tech card inside same two-col
+    const techCounts = countBy(rows, C.TECHNEED);
+    if (Object.keys(techCounts).length) {
+      const techEnts = Object.entries(techCounts).sort((a,b)=>b[1]-a[1]);
+      const techTot = techEnts.reduce((s,[,n])=>s+n,0);
+      const PAL = ['#17E88F','#80BBAD','#538184'];
+      let techBars = techEnts.map(([v,n],i)=>{
+        const w=pct(n,techTot);
+        return `<div class="h-bar-row" style="margin-bottom:0.35rem">
+          <span style="font-size:0.74rem;color:var(--text);width:200px;min-width:200px;max-width:200px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${v}">${v}</span>
+          <div style="width:200px;flex-shrink:0;height:20px;background:var(--card-border);border-radius:4px;overflow:hidden;">
+            <div style="height:100%;width:${w}%;background:${PAL[i%PAL.length]};border-radius:4px;"></div>
+          </div>
+          <span style="font-size:0.72rem;color:var(--text-muted);min-width:60px;text-align:right">${n} (${w}%)</span>
+        </div>`;
+      }).join('');
+      html += `<div class="chart-card"><div class="chart-card-title">Technology & Space Needs</div>${techBars}</div>`;
+    }
     html += `</div>`;
   }
 
@@ -3083,7 +3083,7 @@ function buildLikertBarSVG(title, items) {
 }
 
 function buildSupplyBarSVG(title, items) {
-  const SEG_C = ['#CAD1D3','#D2785A','#17E88F','#DBD99A'];
+  const SEG_C = ['#8B1A1A','#D2785A','#17E88F','#003F2D'];
   const SEG_L = ['None','Too little','Right amount','Too much'];
   const PW = 700, LW = 185, BW = 380, padX = 20, rowH = 26, gap = 6;
   const headerH = 44, legendH = 22, footerH = 14;
@@ -3672,7 +3672,7 @@ function exportPDFReport() {
   // Supply stacked bar
   function supBar(label,d){
     if(!d.t)return'';
-    const segs=[[d.none,'#CAD1D3'],[d.little,'#C0533A'],[d.right,'#17E88F'],[d.much,'#DBD99A']].map(([v,c])=>v>0?`<div style="width:${v}%;background:${c};height:100%;display:flex;align-items:center;justify-content:center">${v>=7?`<span style="font-size:9px;font-weight:700;color:rgba(0,0,0,0.72)">${v}%</span>`:''}</div>`:'').join('');
+    const segs=[[d.none,'#8B1A1A'],[d.little,'#D2785A'],[d.right,'#17E88F'],[d.much,'#003F2D']].map(([v,c])=>v>0?`<div style="width:${v}%;background:${c};height:100%;display:flex;align-items:center;justify-content:center">${v>=7?`<span style="font-size:9px;font-weight:700;color:rgba(255,255,255,0.9)">${v}%</span>`:''}</div>`:'').join('');
     return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px">
       <span style="font-size:11px;color:#2A4A3A;min-width:195px;max-width:195px;flex-shrink:0;line-height:1.35">${esc(label)}</span>
       <div style="flex:1;height:18px;display:flex;border-radius:3px;overflow:hidden;background:#E8F0ED">${segs}</div>
@@ -3802,7 +3802,7 @@ body{font-family:'DM Sans',Arial,sans-serif;background:#fff;color:#1A2E24;font-s
   ${secLabel('Space Supply Adequacy — What employees have enough of (and what\'s lacking)')}
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px">
     <div style="font-size:8.5px;color:#7A9590;display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px;grid-column:1/-1">
-      ${[['#CAD1D3','None'],['#C0533A','Too little'],['#17E88F','Right amount'],['#DBD99A','Too much']].map(([c,l])=>`<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;background:${c};border-radius:2px;display:inline-block"></span>${l}</span>`).join('')}
+      ${[['#8B1A1A','None'],['#D2785A','Too little'],['#17E88F','Right amount'],['#003F2D','Too much']].map(([c,l])=>`<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;background:${c};border-radius:2px;display:inline-block"></span>${l}</span>`).join('')}
     </div>
     ${supplyFull.map(d=>supBar(d.label,d)).join('')}
   </div>
@@ -4115,7 +4115,7 @@ body{font-family:'DM Sans',Arial,sans-serif;background:#fff;color:#1A2E24;font-s
         <div style="font-size:12px;font-weight:700;color:#1A2E24;margin-bottom:8px">Supply Adequacy Scale</div>
         <div style="font-size:11px;color:#2A4A3A;line-height:1.65">Space supply questions ask employees to rate each space type as <strong>Too little</strong>, <strong>Right amount</strong>, <strong>Too much</strong>, or <strong>None</strong>. Bars show the distribution across all four responses. High "Too little" percentages identify the highest-leverage supply gaps.</div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
-          ${[['#CAD1D3','None'],['#C0533A','Too little'],['#17E88F','Right amount'],['#DBD99A','Too much']].map(([c,l])=>`<div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:${c};border-radius:2px;flex-shrink:0"></div><span style="font-size:9px;color:#7A9590">${l}</span></div>`).join('')}
+          ${[['#8B1A1A','None'],['#D2785A','Too little'],['#17E88F','Right amount'],['#003F2D','Too much']].map(([c,l])=>`<div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;background:${c};border-radius:2px;flex-shrink:0"></div><span style="font-size:9px;color:#7A9590">${l}</span></div>`).join('')}
         </div>
       </div>
     </div>
