@@ -948,6 +948,7 @@ const L5_COLORS = ['#8B1A1A','#D2785A','#17E88F','#003F2D'];
 let allRows = [];
 let colIdx = {};
 let filteredRows = [];
+let extraDemoColumns = [];
 
 // ─── PARSE HELPERS ────────────────────────────────────────────────────────────
 function parseLikert(val) {
@@ -1199,6 +1200,28 @@ function autoDetectDemoColumns(rows) {
       v.includes('leader of') || v.includes('individual contributor') || v.includes('leader of leaders')
     )) { C.ROLE = code.trim(); roleFound = true; }
   });
+
+  // Collect any additional categorical columns not already claimed by the four known types
+  extraDemoColumns = [];
+  const claimedCodes = new Set([C.DEPT, C.ROLE, C.GEN, C.TENURE, C.FREQOFF].filter(Boolean));
+  codes.forEach((code, i) => {
+    if (!code || !code.trim()) return;
+    const c = code.trim();
+    if (claimedCodes.has(c)) return;
+    const qt = (qTexts[i] || '').trim();
+    if (!qt || qt.length < 5) return;
+    const uniq = new Set();
+    for (let j = 0; j < dataRows.length; j++) {
+      const v = (dataRows[j][i] || '').trim();
+      if (v) uniq.add(v);
+    }
+    if (uniq.size < 2 || uniq.size > 20) return;
+    const vals2 = [...uniq];
+    if (vals2.every(v => /^[\d.,%-]+$/.test(v))) return;
+    const avgLen = vals2.reduce((s, v) => s + v.length, 0) / vals2.length;
+    if (avgLen > 60) return;
+    extraDemoColumns.push({ code: c, label: qt, vals: vals2.sort() });
+  });
 }
 
 function parseCSV(text) {
@@ -1323,6 +1346,22 @@ function buildFilters() {
       o.value = v; o.textContent = v; sel.appendChild(o);
     });
   });
+
+  // Remove any extra filter groups from a previous file load
+  document.querySelectorAll('.extra-filter-group').forEach(el => el.remove());
+  const filtersRow = document.querySelector('.filters-row');
+  const resetBtn = filtersRow.querySelector('.reset-btn');
+  extraDemoColumns.forEach(({ code, label, vals }) => {
+    const fg = document.createElement('div');
+    fg.className = 'filter-group extra-filter-group';
+    const shortLabel = label.length > 32 ? label.slice(0, 29) + '…' : label;
+    fg.innerHTML = `<span class="filter-label" title="${label}">${shortLabel}</span>
+      <select class="filter-select" id="fExtra_${code}" onchange="applyFilters()">
+        <option value="">All</option>
+        ${vals.map(v => `<option value="${v}">${v}</option>`).join('')}
+      </select>`;
+    filtersRow.insertBefore(fg, resetBtn);
+  });
 }
 
 function updateClientName() {
@@ -1340,12 +1379,17 @@ function applyFilters() {
   const gen = document.getElementById('fGen').value;
   const tenure = document.getElementById('fTenure').value;
   const freq = document.getElementById('fFreq').value;
+  const extraFilters = extraDemoColumns.map(({ code }) => {
+    const el = document.getElementById(`fExtra_${code}`);
+    return { code, val: el ? el.value : '' };
+  });
   filteredRows = allRows.filter(r =>
     (!dept || gv(r,C.DEPT) === dept) &&
     (!role || gv(r,C.ROLE) === role) &&
     (!gen || gv(r,C.GEN) === gen) &&
     (!tenure || gv(r,C.TENURE) === tenure) &&
-    (!freq || gv(r,C.FREQOFF) === freq)
+    (!freq || gv(r,C.FREQOFF) === freq) &&
+    extraFilters.every(({ code, val }) => !val || gv(r, code) === val)
   );
   const nBadge = document.getElementById('nBadge');
   if (nBadge) {
@@ -1362,6 +1406,10 @@ function applyFilters() {
 
 function resetFilters() {
   ['fDept','fRole','fGen','fTenure','fFreq'].forEach(id => document.getElementById(id).value = '');
+  extraDemoColumns.forEach(({ code }) => {
+    const el = document.getElementById(`fExtra_${code}`);
+    if (el) el.value = '';
+  });
   applyFilters();
 }
 
@@ -3310,6 +3358,10 @@ function exportPDFReport() {
     if (document.getElementById('fGen').value)    parts.push('Gen: '  + document.getElementById('fGen').value);
     if (document.getElementById('fTenure').value) parts.push('Tenure: '+ document.getElementById('fTenure').value);
     if (document.getElementById('fFreq').value)   parts.push('Freq: ' + document.getElementById('fFreq').value);
+    extraDemoColumns.forEach(({ code, label }) => {
+      const el = document.getElementById(`fExtra_${code}`);
+      if (el && el.value) parts.push(label.split(' ').slice(0,2).join(' ') + ': ' + el.value);
+    });
     return parts.length ? parts.join(' · ') : 'All respondents';
   })();
 
