@@ -1224,25 +1224,49 @@ function autoDetectDemoColumns(rows) {
     )) { C.Q15 = code.trim(); commuteModeFound = true; }
   });
 
-  // Collect any additional categorical columns not already claimed by the four known types
+  // Collect any additional categorical columns not already claimed by ANY known C column
   extraDemoColumns = [];
-  const claimedCodes = new Set([C.DEPT, C.ROLE, C.GEN, C.TENURE, C.FREQOFF, C.COMMUTE, C.Q15].filter(Boolean));
+  // Claim every string value in C (scalar codes and all array entries) so no known column leaks through
+  const claimedCodes = new Set(
+    Object.values(C).reduce((acc, v) => {
+      if (typeof v === 'string') acc.push(v);
+      else if (Array.isArray(v)) v.forEach(x => { if (typeof x === 'string') acc.push(x); });
+      return acc;
+    }, [])
+  );
+  // Question-text patterns that indicate opinion/behavior/rating questions — not demographic groupings
+  const OPINION_PATTERNS = [
+    'please rate','rate your','rate the','rate each','agreement',
+    'how often','how important','how likely','how long','how many',
+    'please select your primary','please share','please describe',
+    'where do you','when you','when do you','thinking about',
+    'as it relates','for each of','i would be','i sit in',
+    'do you have an assigned','which of the following best describes your primary work',
+    'recommend','willing to','bring in','eat lu','pass someone',
+    'hosting or','overall e','future, where','would you not',
+  ];
+  // Value patterns that indicate a scale or binary — not a demographic category
+  const SCALE_VALUE_PATTERN = /\b(strongly|agree|disagree|never|always|sometimes|often|rarely|very|extremely|important|likely|unlikely|yes|no)\b/i;
+
   codes.forEach((code, i) => {
     if (!code || !code.trim()) return;
     const c = code.trim();
     if (claimedCodes.has(c)) return;
     const qt = (qTexts[i] || '').trim();
     if (!qt || qt.length < 5) return;
+    const qtl = qt.toLowerCase();
+    if (OPINION_PATTERNS.some(p => qtl.includes(p))) return;
     const uniq = new Set();
     for (let j = 0; j < dataRows.length; j++) {
       const v = (dataRows[j][i] || '').trim();
       if (v) uniq.add(v);
     }
-    if (uniq.size < 2 || uniq.size > 20) return;
+    if (uniq.size < 2 || uniq.size > 15) return;
     const vals2 = [...uniq];
     if (vals2.every(v => /^[\d.,%-]+$/.test(v))) return;
+    if (vals2.every(v => SCALE_VALUE_PATTERN.test(v))) return;
     const avgLen = vals2.reduce((s, v) => s + v.length, 0) / vals2.length;
-    if (avgLen > 60) return;
+    if (avgLen > 50) return;
     extraDemoColumns.push({ code: c, label: qt, vals: vals2.sort() });
   });
 }
@@ -2101,11 +2125,12 @@ function renderFuture() {
   const ob = C.OBEN.map((col,i) => ({label:C.OBEN_L[i], p:cbPct(rows,col)})).sort((a,b)=>b.p-a.p);
 
   // ── Top 3 Insights (algorithmic — no API) ─────────────────────────────
-  // Keywords cover both short canonical labels AND verbose real-survey variants
-  // e.g. "Mostly at the main office (3+ days/week)", "Fully at the main office"
-  const officePct = locTotal ? pct(lcSum('mostly office','fully office','mostly at the main','fully at the main','mostly at the office','fully at the office'), locTotal) : 0;
-  const remotePct = locTotal ? pct(lcSum('mostly home','fully remote','mostly at home'), locTotal) : 0;
-  const hybridPct = locTotal ? pct(lcSum('equal mix','hybrid','mix of both'), locTotal) : 0;
+  // Summary stats are derived from the rounded tile percentages so they always
+  // match what is displayed (avoids rounding divergence from independent calculations).
+  const tilePct = (entry) => locTotal ? pct(entry.n, locTotal) : 0;
+  const officePct = locEnts.filter(e => matchLocCanon(e.rawLabel, locCanonical[3]) || matchLocCanon(e.rawLabel, locCanonical[4])).reduce((s,e) => s + tilePct(e), 0);
+  const remotePct = locEnts.filter(e => matchLocCanon(e.rawLabel, locCanonical[0]) || matchLocCanon(e.rawLabel, locCanonical[1])).reduce((s,e) => s + tilePct(e), 0);
+  const hybridPct = locEnts.filter(e => matchLocCanon(e.rawLabel, locCanonical[2])).reduce((s,e) => s + tilePct(e), 0);
   const topLocLabel = locEnts.length ? locEnts.reduce((a,b) => b.n > a.n ? b : a) : null;
   const topRBen     = rb[0];
   const topOBen     = ob[0];
