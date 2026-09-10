@@ -309,6 +309,7 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
 .bar-row { display: flex; align-items: center; gap: 0.7rem; }
 .bar-label { font-size: 0.76rem; color: var(--text); min-width: 215px; max-width: 240px; white-space: normal; line-height: 1.4; flex-shrink: 0; }
 .bar-track { flex: 1; height: 26px; display: flex; border-radius: 4px; overflow: hidden; min-width: 0; }
+.amm-chart .bar-track { width: 360px; flex: unset; }
 .bar-seg { display: flex; align-items: center; justify-content: center; font-size: 0.66rem; font-weight: 600; color: rgba(0,0,0,0.7); white-space: nowrap; overflow: hidden; }
 .bar-seg-lt { color: rgba(255,255,255,0.85); }
 .bar-avg { font-size: 0.72rem; font-weight: 600; color: var(--accent); min-width: 76px; text-align: right; flex-shrink: 0; white-space: nowrap; }
@@ -1157,6 +1158,49 @@ function supplyDist(rows, col) {
 }
 
 // ─── CSV PARSE ────────────────────────────────────────────────────────────────
+
+// Detect DEPT/ROLE/GEN/TENURE columns by question text + data values so the
+// tool works correctly when clients add, remove, or reorder demographic questions.
+function autoDetectDemoColumns(rows) {
+  const codes    = rows[0] || [];
+  const qTexts   = rows[1] || [];
+  const dataRows = rows.slice(3).filter(r => r.some(c => c && c.trim()));
+  let deptFound = false, genFound = false, tenureFound = false, roleFound = false;
+
+  codes.forEach((code, i) => {
+    if (!code || !code.trim()) return;
+    const qt = (qTexts[i] || '').toLowerCase();
+    const vals = [];
+    for (let j = 0; j < Math.min(dataRows.length, 100); j++) {
+      const v = (dataRows[j][i] || '').trim();
+      if (v) vals.push(v.toLowerCase());
+    }
+
+    // DEPT: question mentions "business unit" or "department", not the cross-dept frequency question
+    if (!deptFound &&
+        (qt.includes('business unit') || qt.includes('department')) &&
+        !qt.includes('most frequent') && !qt.includes('work with')) {
+      C.DEPT = code.trim(); deptFound = true;
+    }
+    // GEN: question mentions "generation", or values follow "Born YYYY" pattern
+    if (!genFound && (
+      qt.includes('generation') ||
+      vals.some(v => /^born\s+(before\s+)?\d{4}/.test(v))
+    )) { C.GEN = code.trim(); genFound = true; }
+
+    // TENURE: question mentions time duration, or values contain year-range patterns
+    if (!tenureFound && (
+      qt.includes('how long') || qt.includes('tenure') ||
+      vals.some(v => /\bless than 1 year\b/.test(v) || /\d+\s*[-+]\s*\d+\s*year/.test(v) || /\d+\+\s*year/.test(v))
+    )) { C.TENURE = code.trim(); tenureFound = true; }
+
+    // ROLE: values contain leadership/management level language
+    if (!roleFound && vals.some(v =>
+      v.includes('leader of') || v.includes('individual contributor') || v.includes('leader of leaders')
+    )) { C.ROLE = code.trim(); roleFound = true; }
+  });
+}
+
 function parseCSV(text) {
   const res = Papa.parse(text, { header: false, skipEmptyLines: false });
   const rows = res.data;
@@ -1164,6 +1208,7 @@ function parseCSV(text) {
   colIdx = {};
   rows[0].forEach((name, i) => { if (name && name.trim()) colIdx[name.trim()] = i; });
   allRows = rows.slice(3).filter(r => r.some(c => c && c.trim() !== ''));
+  autoDetectDemoColumns(rows);
   return true;
 }
 
@@ -1366,13 +1411,6 @@ function buildStackedTrack(segData) {
     return `<div class="bar-seg${cls}" style="width:${s.w}%;background:${s.color}${col}" title="${s.name}: ${s.w}%">${inside}</div>`;
   }).join('');
 
-  const tinySegs = processed.filter(s => s.w < INSIDE_MIN);
-  if (tinySegs.length) {
-    const floats = tinySegs.map(s =>
-      `<span style="position:absolute;top:0;left:${s.mid}%;transform:translateX(-50%);font-size:0.6rem;font-weight:700;color:${s.color};white-space:nowrap;line-height:1;pointer-events:none;text-shadow:0 1px 3px rgba(0,15,8,0.95)">${s.w}%</span>`
-    ).join('');
-    return `<div style="flex:1;position:relative;min-width:0;padding-top:16px">${floats}<div class="bar-track" style="flex:unset;width:100%">${segs}</div></div>`;
-  }
   return `<div class="bar-track">${segs}</div>`;
 }
 
@@ -1763,7 +1801,7 @@ function renderRel() {
   }).sort((a,b)=>(b.avg||0)-(a.avg||0));
   html += `<div class="chart-card"><div class="chart-card-title">Hosting Frequency at Office</div><div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem">How frequently do you host each of the following groups in the office?</div><div class="stacked-chart">`;
   hd.forEach(d => html += stackedBar(d.label, d.d, d.t, d.avg));
-  html += `</div><div class="chart-legend">${['Daily/Weekly','Biweekly/Monthly','Quarterly/Rarely','Never'].map((l,i)=>`<div class="legend-item"><div class="legend-dot" style="background:${hostColors[i]}"></div>${l}</div>`).join('')}</div></div>`;
+  html += `</div><div class="chart-legend">${['Never','Quarterly/Rarely','Biweekly/Monthly','Daily/Weekly'].map((l,i)=>`<div class="legend-item"><div class="legend-dot" style="background:${hostColors[3-i]}"></div>${l}</div>`).join('')}</div></div>`;
 
   // Time splits
   const ti = avg(numVals(rows,C.TIME_I))||0;
@@ -1798,7 +1836,7 @@ function renderRel() {
     const q31Bars = q31Ents.map(([v,n],i)=>{
       const w=pct(n,q31Tot);
       return `<div class="h-bar-row" style="margin-bottom:0.35rem">
-        <span style="font-size:0.74rem;color:var(--text);min-width:110px;flex-shrink:0">${v}</span>
+        <span style="font-size:0.74rem;color:var(--text);width:180px;max-width:180px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${v}">${v}</span>
         <div style="width:160px;flex-shrink:0;height:20px;background:var(--card-border);border-radius:4px;overflow:hidden;">
           <div style="height:100%;width:${w}%;background:${PAL[i%PAL.length]};border-radius:4px;"></div>
         </div>
@@ -1952,12 +1990,13 @@ function renderFuture() {
   // ── Data prep ─────────────────────────────────────────────────────────
   // Canonical order + colors for known label variants (case-insensitive match)
   const locCanonical = [
-    { key:'fully remote',  label:'Fully remote',  color:'#D2785A' },
-    { key:'mostly home',   label:'Mostly home',   color:'#DBD99A' },
-    { key:'equal mix',     label:'Equal mix',     color:'#80BBAD' },
-    { key:'mostly office', label:'Mostly office', color:'#17E88F' },
-    { key:'fully office',  label:'Fully office',  color:'#003F2D' },
+    { key:'fully remote',  label:'Fully remote',  color:'#D2785A', pat:['fully remote'] },
+    { key:'mostly home',   label:'Mostly home',   color:'#DBD99A', pat:['mostly home','mostly at home'] },
+    { key:'equal mix',     label:'Equal mix',     color:'#80BBAD', pat:['equal mix','mix of both','hybrid'] },
+    { key:'mostly office', label:'Mostly office', color:'#17E88F', pat:['mostly office','mostly at the office','mostly at the main'] },
+    { key:'fully office',  label:'Fully office',  color:'#003F2D', pat:['fully office','fully at the office','fully at the main'] },
   ];
+  const matchLocCanon = (rawLabel, entry) => { const rl = rawLabel.toLowerCase().trim(); return entry.pat.some(p => rl === p || rl.includes(p)); };
   const fallbackColors = ['#538184','#9DB5AF','#3A5A50','#6B8F7A','#A0C4B0'];
 
   const lc = countBy(rows, C.Q45);
@@ -1967,13 +2006,13 @@ function renderFuture() {
   const locEnts = Object.entries(lc)
     .filter(([,cnt]) => cnt > 0)
     .map(([rawLabel, cnt], i) => {
-      const canon = locCanonical.find(c => c.key === rawLabel.toLowerCase().trim());
+      const canon = locCanonical.find(c => matchLocCanon(rawLabel, c));
       return { label: canon ? canon.label : rawLabel, rawLabel, n: cnt, color: canon ? canon.color : fallbackColors[i % fallbackColors.length] };
     })
     // Sort by canonical order; unrecognized labels go to end
     .sort((a, b) => {
-      const ai = locCanonical.findIndex(c => c.key === a.rawLabel.toLowerCase().trim());
-      const bi = locCanonical.findIndex(c => c.key === b.rawLabel.toLowerCase().trim());
+      const ai = locCanonical.findIndex(c => matchLocCanon(a.rawLabel, c));
+      const bi = locCanonical.findIndex(c => matchLocCanon(b.rawLabel, c));
       return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
     });
 
@@ -1986,7 +2025,7 @@ function renderFuture() {
   // ── Top 3 Insights (algorithmic — no API) ─────────────────────────────
   // Keywords cover both short canonical labels AND verbose real-survey variants
   // e.g. "Mostly at the main office (3+ days/week)", "Fully at the main office"
-  const officePct = locTotal ? pct(lcSum('mostly office','fully office','mostly at the main','fully at the main'), locTotal) : 0;
+  const officePct = locTotal ? pct(lcSum('mostly office','fully office','mostly at the main','fully at the main','mostly at the office','fully at the office'), locTotal) : 0;
   const remotePct = locTotal ? pct(lcSum('mostly home','fully remote','mostly at home'), locTotal) : 0;
   const hybridPct = locTotal ? pct(lcSum('equal mix','hybrid','mix of both'), locTotal) : 0;
   const topLocLabel = locEnts.length ? locEnts.reduce((a,b) => b.n > a.n ? b : a) : null;
@@ -2123,7 +2162,7 @@ function renderFuture() {
   td.forEach(d => {
     const agreeN   = (d.d[4]||0) + (d.d[3]||0);
     const agreePct = d.t ? pct(agreeN, d.t) : 0;
-    const segs     = [4,3,2,1].map((s,i) => ({value:d.d[s]||0, color:L5_COLORS[i]}));
+    const segs     = [4,3,2,1].map((s,i) => ({value:d.d[s]||0, color:L5_COLORS[3-i]}));
     html += `<div class="tradeoff-pie-card">
       <div class="tradeoff-pie-title">${d.label}</div>
       <div class="donut-svg-wrap" style="width:140px;height:140px;margin:0 auto 0.9rem">
@@ -2138,8 +2177,8 @@ function renderFuture() {
           const p2 = d.t ? pct(d.d[s]||0, d.t) : 0;
           if (!p2) return '';
           return `<div class="tradeoff-row">
-            <span class="tradeoff-swatch" style="background:${L5_COLORS[i]}"></span>
-            <span class="tradeoff-lbl">${L5_LABELS[i]}</span>
+            <span class="tradeoff-swatch" style="background:${L5_COLORS[3-i]}"></span>
+            <span class="tradeoff-lbl">${L5_LABELS[3-i]}</span>
             <span class="tradeoff-pct">${p2}%</span>
           </div>`;
         }).join('')}
@@ -2165,23 +2204,23 @@ function renderFuture() {
     return {label:C.AMM_L[i],off,bld,nbr,not,tot};
   }).sort((a,b) => (b.off/Math.max(b.tot,1)) - (a.off/Math.max(a.tot,1)));
 
-  html += `<div class="chart-card"><div class="chart-card-title">Amenity Location Importance</div><div class="stacked-chart">`;
+  html += `<div class="chart-card"><div class="chart-card-title">Amenity Location Importance</div><div class="stacked-chart amm-chart">`;
   ammData.forEach(({label,off,bld,nbr,not,tot}) => {
     if(!tot) return;
     const segData = [
-      {w:pct(off,tot), color:'#17E88F', name:'Within office',   textColor:'rgba(0,0,0,0.7)'},
-      {w:pct(bld,tot), color:'#80BBAD', name:'Within building', textColor:'rgba(0,0,0,0.7)'},
-      {w:pct(nbr,tot), color:'#DBD99A', name:'Neighborhood',    textColor:'rgba(0,0,0,0.7)'},
-      {w:pct(not,tot), color:'#D2785A', name:'Not important',   textColor:'rgba(0,0,0,0.7)'},
+      {w:pct(off,tot), color:'#003F2D', name:'Within office',   textColor:'rgba(255,255,255,0.9)'},
+      {w:pct(bld,tot), color:'#17E88F', name:'Within building', textColor:'rgba(0,0,0,0.7)'},
+      {w:pct(nbr,tot), color:'#D2785A', name:'Neighborhood',    textColor:'rgba(0,0,0,0.7)'},
+      {w:pct(not,tot), color:'#8B1A1A', name:'Not important',   textColor:'rgba(255,255,255,0.9)'},
     ];
     const track = buildStackedTrack(segData);
     html += `<div class="bar-row"><span class="bar-label" title="${label}">${label}</span>${track}</div>`;
   });
   html += `</div><div class="chart-legend">
-    <div class="legend-item"><div class="legend-dot" style="background:#17E88F"></div>Within office</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#80BBAD"></div>Within building</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#DBD99A"></div>Neighborhood</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#D2785A"></div>Not important</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#8B1A1A"></div>Not important</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#D2785A"></div>Neighborhood</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#17E88F"></div>Within building</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#003F2D"></div>Within office</div>
   </div></div>`;
 
   document.getElementById('futureContent').innerHTML = html;
@@ -2190,12 +2229,13 @@ function renderFuture() {
 // ─── PERSONALITY SCALES SVG ───────────────────────────────────────────────────
 function personalityScalesSVG(chartOrder) {
   const W = 620, padL = 112, padR = 112, trackW = W - padL - padR;
-  const rowH = 52, topPad = 8, axisH = 26, legendH = 36;
-  const H = topPad + chartOrder.length * rowH + axisH + legendH;
+  const rowH = 52, axisH = 26, legendH = 36;
   const pillW = 36, pillH = 16;
   let g = '';
 
   const hasOrgAvg = chartOrder.some(s => s.orgPct !== null && s.orgPct !== undefined);
+  const topPad = hasOrgAvg ? 26 : 8;
+  const H = topPad + chartOrder.length * rowH + axisH + legendH;
 
   chartOrder.forEach((s, i) => {
     const cy = topPad + i * rowH + rowH / 2;
@@ -2211,21 +2251,22 @@ function personalityScalesSVG(chartOrder) {
       const tx = padL + (pct / 100) * trackW;
       g += `<line x1="${tx.toFixed(1)}" y1="${cy - 6}" x2="${tx.toFixed(1)}" y2="${cy + 6}" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>`;
     });
-    // Org-average diamond marker (shown when filtered)
-    if (s.orgPct !== null && s.orgPct !== undefined) {
-      const ox = padL + (s.orgPct / 100) * trackW;
-      const d = 6;
-      g += `<g onmousemove="showScaleTip(event,'Company avg: ${s.orgPct}%')" onmouseleave="hideScaleTip()" style="cursor:default">`;
-      g += `<polygon points="${ox.toFixed(1)},${(cy - d).toFixed(1)} ${(ox + d).toFixed(1)},${cy.toFixed(1)} ${ox.toFixed(1)},${(cy + d).toFixed(1)} ${(ox - d).toFixed(1)},${cy.toFixed(1)}" fill="none" stroke="rgba(23,232,143,0.5)" stroke-width="1.5"/>`;
-      g += `<circle cx="${ox.toFixed(1)}" cy="${cy.toFixed(1)}" r="10" fill="transparent"/>`;
-      g += `</g>`;
-    }
-    // Pill marker (filtered or overall avg)
+    // Pill marker (filtered or overall avg) — drawn first so diamond sits on top
     const pillLabel = s.orgPct !== null && s.orgPct !== undefined ? `Filtered avg: ${s.pct}%` : `${s.pct}%`;
     g += `<g onmousemove="showScaleTip(event,'${pillLabel}')" onmouseleave="hideScaleTip()" style="cursor:default">`;
     g += `<rect x="${pillX.toFixed(1)}" y="${(cy - pillH / 2).toFixed(1)}" width="${pillW}" height="${pillH}" rx="8" fill="rgba(242,244,243,0.72)"/>`;
     g += `<rect x="${pillX.toFixed(1)}" y="${(cy - 12).toFixed(1)}" width="${pillW}" height="24" rx="8" fill="transparent"/>`;
     g += `</g>`;
+    // Org-average diamond marker — floated above the track so it's never buried by the pill
+    if (s.orgPct !== null && s.orgPct !== undefined) {
+      const ox = padL + (s.orgPct / 100) * trackW;
+      const d = 6, dy = cy - 16;
+      g += `<line x1="${ox.toFixed(1)}" y1="${(dy + d + 1).toFixed(1)}" x2="${ox.toFixed(1)}" y2="${(cy - pillH / 2).toFixed(1)}" stroke="rgba(23,232,143,0.35)" stroke-width="1" stroke-dasharray="2,2"/>`;
+      g += `<g onmousemove="showScaleTip(event,'Company avg: ${s.orgPct}%')" onmouseleave="hideScaleTip()" style="cursor:default">`;
+      g += `<polygon points="${ox.toFixed(1)},${(dy - d).toFixed(1)} ${(ox + d).toFixed(1)},${dy.toFixed(1)} ${ox.toFixed(1)},${(dy + d).toFixed(1)} ${(ox - d).toFixed(1)},${dy.toFixed(1)}" fill="rgba(23,232,143,0.55)" stroke="rgba(23,232,143,0.9)" stroke-width="1.5"/>`;
+      g += `<circle cx="${ox.toFixed(1)}" cy="${dy.toFixed(1)}" r="12" fill="transparent"/>`;
+      g += `</g>`;
+    }
     // Right label
     g += `<text x="${padL + trackW + 10}" y="${cy}" font-size="11" fill="rgba(23,232,143,0.85)" text-anchor="start" dominant-baseline="middle" font-family="DM Sans,Arial,sans-serif">${s.high}</text>`;
   });
@@ -2605,7 +2646,7 @@ function exportTradeoffPNG() {
     g += `<text x="${cx}" y="${pieY - 10}" text-anchor="middle" font-size="9.5" font-weight="600" fill="#F2F4F3">${esc(l1)}</text>`;
     if (l2) g += `<text x="${cx}" y="${pieY - 0}" text-anchor="middle" font-size="9.5" font-weight="600" fill="#F2F4F3">${esc(l2)}</text>`;
     // Pie
-    const segs = [4,3,2,1].map((s, i) => ({ value: d.d[s]||0, color: L5_COLORS[i] })).filter(s => s.value > 0);
+    const segs = [4,3,2,1].map((s, i) => ({ value: d.d[s]||0, color: L5_COLORS[3-i] })).filter(s => s.value > 0);
     const total = segs.reduce((s, x) => s + x.value, 0);
     if (total > 0) {
       let ang = -Math.PI / 2;
@@ -2626,8 +2667,8 @@ function exportTradeoffPNG() {
       const p = d.t ? Math.round((d.d[s]||0) / d.t * 100) : 0;
       if (!p) return;
       const ly = legY0 + i * 16;
-      g += `<rect x="${legX}" y="${ly}" width="8" height="8" rx="2" fill="${L5_COLORS[i]}"/>`;
-      g += `<text x="${legX + 11}" y="${ly + 7}" font-size="8" fill="#7A9590">${L5_LABELS[i]}</text>`;
+      g += `<rect x="${legX}" y="${ly}" width="8" height="8" rx="2" fill="${L5_COLORS[3-i]}"/>`;
+      g += `<text x="${legX + 11}" y="${ly + 7}" font-size="8" fill="#7A9590">${L5_LABELS[3-i]}</text>`;
       g += `<text x="${legX + cardW - 8}" y="${ly + 7}" text-anchor="end" font-size="8" font-weight="600" fill="#F2F4F3">${p}%</text>`;
     });
   });
@@ -2991,26 +3032,6 @@ function renderSentiment() {
       <div class="sent-stat-value" style="color:${satCol}">${satAvg !== null ? satAvg : '—'}</div>
       <div class="sent-stat-code">SATISFACTION</div>
       <div class="sent-stat-sub">Avg score out of 10${oSatSub}</div>
-    </div>
-    <div class="sent-stat-card" style="border-color:${nps!==null?npsCol+'33':'var(--card-border)'};background:${nps!==null?npsCol+'0d':'var(--card-bg)'}">
-      <div class="sent-stat-value" style="color:${npsCol}">${nps !== null ? nps : '—'}</div>
-      <div class="sent-stat-code">NPS SCORE</div>
-      <div class="sent-stat-sub">Promoters − Detractors${oNpsSub}</div>
-    </div>
-    <div class="sent-stat-card" style="border-color:rgba(23,232,143,0.25);background:rgba(23,232,143,0.06)">
-      <div class="sent-stat-value" style="color:#17E88F">${pP}%</div>
-      <div class="sent-stat-code">PROMOTERS</div>
-      <div class="sent-stat-sub">${pro} scored 9–10</div>
-    </div>
-    <div class="sent-stat-card${pasWarn ? ' warn' : ''}">
-      <div class="sent-stat-value" style="color:#80BBAD">${paP}%</div>
-      <div class="sent-stat-code">${pasWarn ? '⚠ ' : ''}PASSIVES</div>
-      <div class="sent-stat-sub">${pas} scored 7–8${pasWarn ? ' · >40%' : ''}</div>
-    </div>
-    <div class="sent-stat-card" style="border-color:rgba(210,120,90,0.25);background:rgba(210,120,90,0.06)">
-      <div class="sent-stat-value" style="color:#D2785A">${dP}%</div>
-      <div class="sent-stat-code">DETRACTORS</div>
-      <div class="sent-stat-sub">${det} scored 0–6</div>
     </div>
   </div>`;
 
