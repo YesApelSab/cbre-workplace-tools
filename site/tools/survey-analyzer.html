@@ -3198,6 +3198,33 @@ function renderSentiment() {
     </div>
   </div>`;
 
+  // ── NPS bar summary ──────────────────────────────────────────────────
+  if (nT > 0) {
+    html += `<div class="chart-card" style="margin-bottom:0.9rem;padding:0.85rem 1.1rem">
+      <div style="display:flex;align-items:center;gap:2rem;flex-wrap:wrap">
+        <div style="text-align:center;flex-shrink:0;min-width:72px">
+          <div style="font-family:'DM Serif Display',serif;font-size:2.8rem;line-height:1;color:${npsCol}">${nps !== null ? (nps >= 0 ? '+' : '') + nps : '—'}</div>
+          <div style="font-size:0.6rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted);margin-top:0.3rem">NPS Score</div>
+        </div>
+        <div style="flex:1;min-width:200px">
+          <div style="height:22px;display:flex;border-radius:5px;overflow:hidden;margin-bottom:0.65rem">
+            ${pP > 0 ? `<div style="width:${pP}%;background:#17E88F;" title="Promoters ${pP}%"></div>` : ''}
+            ${paP > 0 ? `<div style="width:${paP}%;background:#80BBAD;" title="Passives ${paP}%"></div>` : ''}
+            ${dP > 0  ? `<div style="width:${dP}%;background:#D2785A;" title="Detractors ${dP}%"></div>` : ''}
+          </div>
+          <div style="display:flex;gap:1.5rem;flex-wrap:wrap">
+            <div><span style="font-size:1.1rem;font-family:'DM Serif Display',serif;color:#17E88F">${pP}%</span> <span style="font-size:0.68rem;color:var(--text-muted)">Promoters · ${pro} · scored 9–10</span></div>
+            <div><span style="font-size:1.1rem;font-family:'DM Serif Display',serif;color:#80BBAD">${paP}%</span> <span style="font-size:0.68rem;color:var(--text-muted)">Passives · ${pas} · scored 7–8</span></div>
+            <div><span style="font-size:1.1rem;font-family:'DM Serif Display',serif;color:#D2785A">${dP}%</span> <span style="font-size:0.68rem;color:var(--text-muted)">Detractors · ${det} · scored 0–6</span></div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:0.6rem;font-size:0.65rem;color:var(--text-muted);border-top:1px solid var(--card-border);padding-top:0.4rem">
+        NPS = % Promoters − % Detractors &nbsp;·&nbsp; +30 or above is strong &nbsp;·&nbsp; +50 or above is excellent
+      </div>
+    </div>`;
+  }
+
   // ── NPS vs Satisfaction scatter plot ─────────────────────────────────
   const scatterData = [];
   rows.forEach(r => {
@@ -3210,31 +3237,41 @@ function renderSentiment() {
   });
 
   if (scatterData.length > 0) {
-    const SW = 580, SH = 310;
-    const padL = 46, padR = 20, padT = 16, padB = 56;
+    // Aggregate into (nps, sat) cells — one bubble per unique cell, sized by count
+    const cellMap = {};
+    const tierCol = { promoter:'#17E88F', passive:'#80BBAD', detractor:'#D2785A' };
+    scatterData.forEach(d => {
+      const key = `${d.nps}_${d.sat}`;
+      if (!cellMap[key]) cellMap[key] = { nps: d.nps, sat: d.sat, tier: d.tier, count: 0 };
+      cellMap[key].count++;
+    });
+    const cells = Object.values(cellMap);
+    const maxCount = Math.max(...cells.map(c => c.count));
+    const MIN_R = 5, MAX_R = 20;
+    const radiusFor = n => MIN_R + (MAX_R - MIN_R) * Math.sqrt(n / maxCount);
+
+    const SW = 580, SH = 340;
+    const padL = 46, padR = 20, padT = 20, padB = 56;
     const tw2 = SW - padL - padR, th2 = SH - padT - padB;
     const xP = v => padL + (v / 10) * tw2;
     const yP = v => padT + (1 - (v - 1) / 9) * th2;
-    const tierCol = { promoter:'#17E88F', passive:'#80BBAD', detractor:'#D2785A' };
     const zones2 = [
       { x0:0, x1:6.5, color:'#D2785A', label:'Detractors', lx:3.25 },
       { x0:6.5, x1:8.5, color:'#80BBAD', label:'Passives', lx:7.5 },
       { x0:8.5, x1:10, color:'#17E88F', label:'Promoters', lx:9.25 },
     ];
 
-    let seed2 = 31; const rng2 = () => { seed2=(seed2*16807)%2147483647; return (seed2-1)/2147483646; };
-
     let sc = `<svg viewBox="0 0 ${SW} ${SH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">`;
     // Zone backgrounds
     zones2.forEach(z => {
-      sc += `<rect x="${xP(z.x0).toFixed(1)}" y="${padT}" width="${(xP(z.x1)-xP(z.x0)).toFixed(1)}" height="${th2}" fill="${z.color}15"/>`;
+      sc += `<rect x="${xP(z.x0).toFixed(1)}" y="${padT}" width="${(xP(z.x1)-xP(z.x0)).toFixed(1)}" height="${th2}" fill="${z.color}12"/>`;
       sc += `<text x="${xP(z.lx).toFixed(1)}" y="${(padT+th2+38).toFixed(1)}" text-anchor="middle" font-size="10" fill="${z.color}" font-family="DM Sans,Arial,sans-serif" font-weight="700">${z.label}</text>`;
     });
     // Zone separator lines
     [6.5, 8.5].forEach(v => {
       sc += `<line x1="${xP(v).toFixed(1)}" y1="${padT}" x2="${xP(v).toFixed(1)}" y2="${padT+th2}" stroke="rgba(255,255,255,0.12)" stroke-width="1" stroke-dasharray="4,3"/>`;
     });
-    // Grid lines + axis labels
+    // Grid + axis tick labels
     for (let s=0; s<=10; s++) {
       sc += `<line x1="${xP(s).toFixed(1)}" y1="${padT}" x2="${xP(s).toFixed(1)}" y2="${padT+th2}" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>`;
       sc += `<text x="${xP(s).toFixed(1)}" y="${(padT+th2+16).toFixed(1)}" text-anchor="middle" font-size="9" fill="rgba(242,244,243,0.35)" font-family="DM Sans,Arial,sans-serif">${s}</text>`;
@@ -3249,18 +3286,19 @@ function renderSentiment() {
     // Axis titles
     sc += `<text x="${(padL+tw2/2).toFixed(1)}" y="${(SH-6).toFixed(1)}" text-anchor="middle" font-size="10" fill="rgba(242,244,243,0.5)" font-family="DM Sans,Arial,sans-serif">NPS Score (0–10)</text>`;
     sc += `<text transform="rotate(-90)" x="${(-(padT+th2/2)).toFixed(1)}" y="12" text-anchor="middle" font-size="10" fill="rgba(242,244,243,0.5)" font-family="DM Sans,Arial,sans-serif">Satisfaction Score (1–10)</text>`;
-    // Dots
-    scatterData.forEach(d => {
-      const jx = (rng2()-0.5)*10, jy = (rng2()-0.5)*10;
-      const cx = Math.max(padL+5, Math.min(padL+tw2-5, xP(d.nps)+jx));
-      const cy = Math.max(padT+5, Math.min(padT+th2-5, yP(d.sat)+jy));
-      sc += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="5.5" fill="${tierCol[d.tier]}" fill-opacity="0.72" stroke="${tierCol[d.tier]}" stroke-width="0.5"/>`;
+    // Bubbles (draw larger ones first so smaller ones sit on top)
+    cells.sort((a,b) => b.count - a.count).forEach(c => {
+      const cx = xP(c.nps), cy = yP(c.sat), r = radiusFor(c.count);
+      sc += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="${tierCol[c.tier]}" fill-opacity="0.68" stroke="${tierCol[c.tier]}" stroke-width="1" stroke-opacity="0.85"><title>${c.count} respondent${c.count>1?'s':''} · NPS ${c.nps} · Sat ${c.sat}</title></circle>`;
+      if (c.count > 1) {
+        sc += `<text cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" x="${cx.toFixed(1)}" y="${(cy+3).toFixed(1)}" text-anchor="middle" font-size="${Math.min(9, r * 0.8).toFixed(1)}" fill="rgba(0,0,0,0.7)" font-family="DM Sans,Arial,sans-serif" font-weight="700" pointer-events="none">${c.count}</text>`;
+      }
     });
     sc += `</svg>`;
 
     html += `<div class="chart-card" style="margin-bottom:0.9rem">
       <div class="chart-card-title">NPS vs. Satisfaction <span>N=${scatterData.length} · NPS ${nps !== null ? (nps>=0?'+':'')+nps : '—'}</span></div>
-      <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.8rem">Each dot is one respondent. X-axis = likelihood to recommend the office (eNPS 0–10). Y-axis = overall workplace satisfaction (1–10). Color = NPS tier.</div>
+      <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.8rem">Each bubble represents respondents with the same NPS and Satisfaction scores. Bubble size = number of respondents. X-axis = eNPS (0–10). Y-axis = workplace satisfaction (1–10).</div>
       ${sc}
     </div>`;
   }
