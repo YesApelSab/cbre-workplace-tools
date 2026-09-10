@@ -949,6 +949,7 @@ let allRows = [];
 let colIdx = {};
 let filteredRows = [];
 let extraDemoColumns = [];
+let qTextsMap = {};
 
 // ─── PARSE HELPERS ────────────────────────────────────────────────────────────
 function parseLikert(val) {
@@ -1158,6 +1159,11 @@ function supplyDist(rows, col) {
   return c;
 }
 
+// Returns the actual question text from the CSV for a column code, falling back to a default.
+function qLabel(col, fallback) {
+  return (col && qTextsMap[col]) ? qTextsMap[col] : (fallback || col || '');
+}
+
 // ─── CSV PARSE ────────────────────────────────────────────────────────────────
 
 // Detect DEPT/ROLE/GEN/TENURE columns by question text + data values so the
@@ -1201,9 +1207,26 @@ function autoDetectDemoColumns(rows) {
     )) { C.ROLE = code.trim(); roleFound = true; }
   });
 
+  // Detect commute-related columns so C.Q15 / C.COMMUTE stay correct when Q-numbers shift
+  let commuteTimeFound = false, commuteModeFound = false;
+  codes.forEach((code, i) => {
+    if (!code || !code.trim()) return;
+    const qt = (qTexts[i] || '').toLowerCase();
+    if (!commuteTimeFound && (
+      qt.includes('commute time') || qt.includes('one-way commute') ||
+      (qt.includes('how long') && qt.includes('commute')) || qt.includes('travel time to')
+    )) { C.COMMUTE = code.trim(); commuteTimeFound = true; }
+    if (!commuteModeFound && (
+      qt.includes('commute mode') || qt.includes('mode of transport') ||
+      qt.includes('how do you commute') || qt.includes('how do you typically commute') ||
+      (qt.includes('primary') && qt.includes('transportation')) ||
+      qt.includes('travel to the office') || qt.includes('travel to work')
+    )) { C.Q15 = code.trim(); commuteModeFound = true; }
+  });
+
   // Collect any additional categorical columns not already claimed by the four known types
   extraDemoColumns = [];
-  const claimedCodes = new Set([C.DEPT, C.ROLE, C.GEN, C.TENURE, C.FREQOFF].filter(Boolean));
+  const claimedCodes = new Set([C.DEPT, C.ROLE, C.GEN, C.TENURE, C.FREQOFF, C.COMMUTE, C.Q15].filter(Boolean));
   codes.forEach((code, i) => {
     if (!code || !code.trim()) return;
     const c = code.trim();
@@ -1229,7 +1252,14 @@ function parseCSV(text) {
   const rows = res.data;
   if (rows.length < 5) { showErr('CSV must have at least 5 rows (3 header + data).'); return false; }
   colIdx = {};
-  rows[0].forEach((name, i) => { if (name && name.trim()) colIdx[name.trim()] = i; });
+  qTextsMap = {};
+  const qRow = rows[1] || [];
+  rows[0].forEach((code, i) => {
+    if (code && code.trim()) {
+      colIdx[code.trim()] = i;
+      qTextsMap[code.trim()] = (qRow[i] || '').trim();
+    }
+  });
   allRows = rows.slice(3).filter(r => r.some(c => c && c.trim() !== ''));
   autoDetectDemoColumns(rows);
   return true;
@@ -1547,18 +1577,18 @@ function renderDemo() {
   } else notice.style.display = 'none';
 
   const COLS = [
-    { col:C.DEPT, label:'Department', order:null },
-    { col:C.ROLE, label:'Role', order:['Leader of Leaders','Leader of ICs','Individual Contributor'] },
-    { col:C.GEN, label:'Generation', order:['Born 1997 or after','Born 1981–1996','Born 1965–1980','Born before 1965','Prefer not to say'] },
-    { col:C.TENURE, label:'Tenure', order:['Less than 1 year','1–2 years','3–5 years','6–10 years','10+ years'] },
-    { col:C.FREQOFF, label:'Office Frequency', order:['Never (fully remote)','Less than one day per week','1 day per week','2–3 days per week','4 days per week','Every day (5 days per week)'] },
-    { col:C.WKSCHED, label:'Weekly Schedule Type', order:null },
-    { col:C.TLOCAL, label:'Same Office as Majority of Team', order:['Yes','No'] },
-    { col:C.MLOCAL, label:'Same Office as Direct Manager', order:['Yes','No'] },
-    { col:C.Q11,    label:'Has Assigned Workspace', order:['Yes','No'] },
-    { col:C.Q12,    label:'Assigned Workspace Type', order:null },
-    { col:C.COMMUTE, label:'One-Way Commute Time', order:['0–15 minutes','15–30 minutes','30–45 minutes','45–60 minutes','60+ minutes'] },
-    { col:C.Q15,    label:'Primary Commute Mode', order:null },
+    { col:C.DEPT,    label:qLabel(C.DEPT,    'Department'),                    order:null },
+    { col:C.ROLE,    label:qLabel(C.ROLE,    'Role'),                          order:['Leader of Leaders','Leader of ICs','Individual Contributor'] },
+    { col:C.GEN,     label:qLabel(C.GEN,     'Generation'),                    order:['Born 1997 or after','Born 1981–1996','Born 1965–1980','Born before 1965','Prefer not to say'] },
+    { col:C.TENURE,  label:qLabel(C.TENURE,  'Tenure'),                        order:['Less than 1 year','1–2 years','3–5 years','6–10 years','10+ years'] },
+    { col:C.FREQOFF, label:qLabel(C.FREQOFF, 'Office Frequency'),              order:['Never (fully remote)','Less than one day per week','1 day per week','2–3 days per week','4 days per week','Every day (5 days per week)'] },
+    { col:C.WKSCHED, label:qLabel(C.WKSCHED, 'Weekly Schedule Type'),         order:null },
+    { col:C.TLOCAL,  label:qLabel(C.TLOCAL,  'Same Office as Majority of Team'), order:['Yes','No'] },
+    { col:C.MLOCAL,  label:qLabel(C.MLOCAL,  'Same Office as Direct Manager'),   order:['Yes','No'] },
+    { col:C.Q11,     label:qLabel(C.Q11,     'Has Assigned Workspace'),        order:['Yes','No'] },
+    { col:C.Q12,     label:qLabel(C.Q12,     'Assigned Workspace Type'),       order:null },
+    { col:C.COMMUTE, label:qLabel(C.COMMUTE, 'One-Way Commute Time'),          order:['0–15 minutes','15–30 minutes','30–45 minutes','45–60 minutes','60+ minutes'] },
+    { col:C.Q15,     label:qLabel(C.Q15,     'Primary Commute Mode'),          order:null },
   ];
   const PAL = ['#17E88F','#0FB870','#80BBAD','#538184','#003F2D','#DBD99A','#D2785A','#CAD1D3','#012A2D'];
 
