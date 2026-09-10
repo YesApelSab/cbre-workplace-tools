@@ -308,8 +308,7 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
 .stacked-chart { display: flex; flex-direction: column; gap: 0.6rem; }
 .bar-row { display: flex; align-items: center; gap: 0.7rem; }
 .bar-label { font-size: 0.76rem; color: var(--text); min-width: 215px; max-width: 240px; white-space: normal; line-height: 1.4; flex-shrink: 0; }
-.bar-track { flex: 1; height: 26px; display: flex; border-radius: 4px; overflow: hidden; min-width: 0; }
-.amm-chart .bar-track { width: 360px; flex: unset; }
+.bar-track { flex: unset; width: 360px; height: 26px; display: flex; border-radius: 4px; overflow: hidden; }
 .bar-seg { display: flex; align-items: center; justify-content: center; font-size: 0.66rem; font-weight: 600; color: rgba(0,0,0,0.7); white-space: nowrap; overflow: hidden; }
 .bar-seg-lt { color: rgba(255,255,255,0.85); }
 .bar-avg { font-size: 0.72rem; font-weight: 600; color: var(--accent); min-width: 76px; text-align: right; flex-shrink: 0; white-space: nowrap; }
@@ -322,7 +321,7 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
 /* H-BAR */
 .h-bar-chart { display: flex; flex-direction: column; gap: 0.5rem; }
 .h-bar-row { display: flex; align-items: center; gap: 0.65rem; }
-.h-bar-label { font-size: 0.76rem; color: var(--text); min-width: 200px; max-width: 240px; flex-shrink: 0; white-space: normal; line-height: 1.4; }
+.h-bar-label { font-size: 0.76rem; color: var(--text); width: 200px; min-width: 200px; max-width: 200px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.4; }
 
 /* DONUT */
 .donut-wrap { display: flex; align-items: center; gap: 2rem; flex-wrap: wrap; }
@@ -833,6 +832,7 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
           <span class="filter-label">Office Frequency</span>
           <select class="filter-select" id="fFreq" onchange="applyFilters()"><option value="">All Frequencies</option></select>
         </div>
+        <button class="reset-btn" onclick="showAddFilterPicker(this)" id="addFilterBtn">+ Add Filter</button>
         <button class="reset-btn" onclick="resetFilters()">Reset</button>
         <button class="reset-btn" onclick="exportPDFReport()" style="color:var(--accent);border-color:rgba(23,232,143,0.35);margin-left:0.25rem">↓ Export PDF</button>
         <button id="clientPkgBtn" class="reset-btn" onclick="downloadClientPackage()" style="color:var(--accent);border-color:rgba(23,232,143,0.35);margin-left:0.25rem">↓ Client Package</button>
@@ -950,6 +950,7 @@ let colIdx = {};
 let filteredRows = [];
 let extraDemoColumns = [];
 let qTextsMap = {};
+let allCategoricalColumns = [];
 
 // ─── PARSE HELPERS ────────────────────────────────────────────────────────────
 function parseLikert(val) {
@@ -1269,6 +1270,30 @@ function autoDetectDemoColumns(rows) {
     if (avgLen > 50) return;
     extraDemoColumns.push({ code: c, label: qt, vals: vals2.sort() });
   });
+
+  // allCategoricalColumns = every categorical column in the CSV (for the "Add Filter" picker)
+  allCategoricalColumns = [];
+  const strictClaimed = new Set(Object.values(C).reduce((acc, v) => {
+    if (typeof v === 'string') acc.push(v);
+    else if (Array.isArray(v)) v.forEach(x => { if (typeof x === 'string') acc.push(x); });
+    return acc;
+  }, []));
+  codes.forEach((code, i) => {
+    if (!code || !code.trim()) return;
+    const c2 = code.trim();
+    if (strictClaimed.has(c2)) return;
+    const qt2 = (qTexts[i] || '').trim();
+    if (!qt2 || qt2.length < 5) return;
+    const uniq2 = new Set();
+    for (let j = 0; j < dataRows.length; j++) {
+      const v = (dataRows[j][i] || '').trim();
+      if (v) uniq2.add(v);
+    }
+    if (uniq2.size < 2 || uniq2.size > 25) return;
+    const vals3 = [...uniq2];
+    if (vals3.every(v => /^[\d.,%-]+$/.test(v))) return;
+    allCategoricalColumns.push({ code: c2, label: qt2, vals: vals3.sort() });
+  });
 }
 
 function parseCSV(text) {
@@ -1458,6 +1483,38 @@ function applyFilters() {
   renderActive();
 }
 
+function showAddFilterPicker(btn) {
+  // Remove any existing picker
+  const existing = document.getElementById('addFilterPicker');
+  if (existing) { existing.remove(); return; }
+  // Columns already shown in filter bar
+  const shownCodes = new Set([
+    ...['fDept','fRole','fGen','fTenure','fFreq'].map(() => null), // standard filters always shown
+    ...extraDemoColumns.map(e => e.code),
+  ].filter(Boolean));
+  const available = allCategoricalColumns.filter(c => !shownCodes.has(c.code));
+  if (!available.length) { btn.textContent = 'No more filters'; setTimeout(() => { btn.textContent = '+ Add Filter'; }, 1800); return; }
+  const picker = document.createElement('div');
+  picker.id = 'addFilterPicker';
+  picker.style.cssText = 'position:absolute;z-index:999;background:var(--sidebar);border:1px solid var(--card-border);border-radius:8px;padding:0.5rem;box-shadow:0 4px 20px rgba(0,0,0,0.4);min-width:280px;max-height:320px;overflow-y:auto';
+  const rect = btn.getBoundingClientRect();
+  picker.style.top = (rect.bottom + window.scrollY + 6) + 'px';
+  picker.style.left = rect.left + 'px';
+  picker.innerHTML = `<div style="font-size:0.7rem;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:0.4rem;padding:0 0.25rem">Select a question to filter by</div>` +
+    available.map(c => `<div onclick="addExtraFilter('${c.code}');document.getElementById('addFilterPicker').remove()" style="cursor:pointer;padding:0.4rem 0.5rem;border-radius:5px;font-size:0.74rem;color:var(--text);line-height:1.4" onmouseover="this.style.background='rgba(23,232,143,0.08)'" onmouseout="this.style.background=''">${c.label}</div>`).join('');
+  document.body.appendChild(picker);
+  setTimeout(() => { document.addEventListener('click', function h(e) { if (!picker.contains(e.target) && e.target !== btn) { picker.remove(); document.removeEventListener('click', h); } }); }, 10);
+}
+
+function addExtraFilter(code) {
+  if (extraDemoColumns.some(e => e.code === code)) return;
+  const col = allCategoricalColumns.find(c => c.code === code);
+  if (!col) return;
+  extraDemoColumns.push(col);
+  buildFilters();
+  applyFilters();
+}
+
 function resetFilters() {
   ['fDept','fRole','fGen','fTenure','fFreq'].forEach(id => document.getElementById(id).value = '');
   extraDemoColumns.forEach(({ code }) => {
@@ -1546,7 +1603,7 @@ function hBar(label, val, color) {
   const w = Math.min(100, Math.max(0, Math.round(val)));
   return `<div class="h-bar-row">
     <span class="h-bar-label" title="${label}">${label}</span>
-    <div style="width:160px;flex-shrink:0;height:22px;background:var(--card-border);border-radius:4px;overflow:hidden;">
+    <div style="width:200px;flex-shrink:0;height:22px;background:var(--card-border);border-radius:4px;overflow:hidden;">
       <div style="height:100%;width:${w}%;background:${color};border-radius:4px;"></div>
     </div>
     <span style="font-size:0.75rem;color:var(--text-muted);min-width:36px;text-align:right">${w}%</span>
@@ -1628,10 +1685,10 @@ function renderDemo() {
       const w = pct(n,tot);
       const isFullOffice = col === C.FREQOFF && v === 'Every day (5 days per week)';
       const barColor = isFullOffice ? '#17E88F' : PAL[i%PAL.length];
-      const labelStyle = isFullOffice ? 'font-size:0.74rem;color:#17E88F;font-weight:600;min-width:155px;max-width:155px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis' : 'font-size:0.74rem;color:var(--text);min-width:155px;max-width:155px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+      const labelStyle = isFullOffice ? 'font-size:0.74rem;color:#17E88F;font-weight:600;width:200px;min-width:200px;max-width:200px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis' : 'font-size:0.74rem;color:var(--text);width:200px;min-width:200px;max-width:200px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
       return `<div class="h-bar-row" style="margin-bottom:0.35rem">
         <span style="${labelStyle}" title="${v}">${v}</span>
-        <div style="width:160px;flex-shrink:0;height:20px;background:var(--card-border);border-radius:4px;overflow:hidden;">
+        <div style="width:200px;flex-shrink:0;height:20px;background:var(--card-border);border-radius:4px;overflow:hidden;">
           <div style="height:100%;width:${w}%;background:${barColor};border-radius:4px;"></div>
         </div>
         <span style="font-size:0.72rem;color:${isFullOffice?'#17E88F':'var(--text-muted)'};min-width:65px;text-align:right;${isFullOffice?'font-weight:600':''}">${n} (${w}%)</span>
@@ -1767,8 +1824,8 @@ function renderSpace() {
       return ents.map(([v,n],i)=>{
         const w=pct(n,tot);
         return `<div class="h-bar-row" style="margin-bottom:0.3rem">
-          <span style="font-size:0.74rem;color:var(--text);min-width:160px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v}</span>
-          <div style="width:160px;flex-shrink:0;height:18px;background:var(--card-border);border-radius:4px;overflow:hidden;">
+          <span style="font-size:0.74rem;color:var(--text);width:200px;min-width:200px;max-width:200px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${v}">${v}</span>
+          <div style="width:200px;flex-shrink:0;height:18px;background:var(--card-border);border-radius:4px;overflow:hidden;">
             <div style="height:100%;width:${w}%;background:${PAL[i%PAL.length]};border-radius:4px;"></div>
           </div>
           <span style="font-size:0.72rem;color:var(--text-muted);min-width:60px;text-align:right">${n} (${w}%)</span>
@@ -1791,8 +1848,8 @@ function renderSpace() {
     techEnts.forEach(([v,n],i)=>{
       const w=pct(n,techTot);
       html += `<div class="h-bar-row" style="margin-bottom:0.35rem">
-        <span style="font-size:0.74rem;color:var(--text);min-width:140px;flex-shrink:0">${v}</span>
-        <div style="width:160px;flex-shrink:0;height:20px;background:var(--card-border);border-radius:4px;overflow:hidden;">
+        <span style="font-size:0.74rem;color:var(--text);width:200px;min-width:200px;max-width:200px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${v}">${v}</span>
+        <div style="width:200px;flex-shrink:0;height:20px;background:var(--card-border);border-radius:4px;overflow:hidden;">
           <div style="height:100%;width:${w}%;background:${PAL[i%PAL.length]};border-radius:4px;"></div>
         </div>
         <span style="font-size:0.72rem;color:var(--text-muted);min-width:60px;text-align:right">${n} (${w}%)</span>
@@ -1938,8 +1995,8 @@ function renderRel() {
     const q31Bars = q31Ents.map(([v,n],i)=>{
       const w=pct(n,q31Tot);
       return `<div class="h-bar-row" style="margin-bottom:0.35rem">
-        <span style="font-size:0.74rem;color:var(--text);width:180px;max-width:180px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${v}">${v}</span>
-        <div style="width:160px;flex-shrink:0;height:20px;background:var(--card-border);border-radius:4px;overflow:hidden;">
+        <span style="font-size:0.74rem;color:var(--text);width:200px;min-width:200px;max-width:200px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${v}">${v}</span>
+        <div style="width:200px;flex-shrink:0;height:20px;background:var(--card-border);border-radius:4px;overflow:hidden;">
           <div style="height:100%;width:${w}%;background:${PAL[i%PAL.length]};border-radius:4px;"></div>
         </div>
         <span style="font-size:0.72rem;color:var(--text-muted);min-width:65px;text-align:right">${n} (${w}%)</span>
@@ -1958,8 +2015,8 @@ function renderRel() {
     const q34Bars = q34Ents.map(([v,n]) => {
       const w = pct(n, q34Tot);
       return `<div class="h-bar-row" style="margin-bottom:0.35rem">
-        <span style="font-size:0.74rem;color:var(--text);min-width:110px;flex-shrink:0">${v}</span>
-        <div style="width:160px;flex-shrink:0;height:20px;background:var(--card-border);border-radius:4px;overflow:hidden;">
+        <span style="font-size:0.74rem;color:var(--text);width:200px;min-width:200px;max-width:200px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v}</span>
+        <div style="width:200px;flex-shrink:0;height:20px;background:var(--card-border);border-radius:4px;overflow:hidden;">
           <div style="height:100%;width:${w}%;background:${Q34_PAL[v]};border-radius:4px;"></div>
         </div>
         <span style="font-size:0.72rem;color:var(--text-muted);min-width:65px;text-align:right">${n} (${w}%)</span>
