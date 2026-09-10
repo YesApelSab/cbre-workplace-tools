@@ -308,7 +308,8 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
 .stacked-chart { display: flex; flex-direction: column; gap: 0.6rem; }
 .bar-row { display: flex; align-items: center; gap: 0.7rem; }
 .bar-label { font-size: 0.76rem; color: var(--text); min-width: 215px; max-width: 240px; white-space: normal; line-height: 1.4; flex-shrink: 0; }
-.bar-track { flex: unset; width: 360px; height: 26px; display: flex; border-radius: 4px; overflow: hidden; }
+.bar-track { flex: 1; height: 26px; display: flex; border-radius: 4px; overflow: hidden; min-width: 0; }
+.amm-chart .bar-track { width: 360px; flex: unset; }
 .bar-seg { display: flex; align-items: center; justify-content: center; font-size: 0.66rem; font-weight: 600; color: rgba(0,0,0,0.7); white-space: nowrap; overflow: hidden; }
 .bar-seg-lt { color: rgba(255,255,255,0.85); }
 .bar-avg { font-size: 0.72rem; font-weight: 600; color: var(--accent); min-width: 76px; text-align: right; flex-shrink: 0; white-space: nowrap; }
@@ -1370,8 +1371,10 @@ function initApp() {
   // If this is a client package, load preloaded data into the block-scoped vars
   if (window.__PRELOADED__ && !allRows.length) {
     const p = window.__PRELOADED__;
-    allRows = p.allRows || [];
-    colIdx  = p.colIdx  || {};
+    allRows          = p.allRows          || [];
+    colIdx           = p.colIdx           || {};
+    qTextsMap        = p.qTextsMap        || {};
+    extraDemoColumns = p.extraDemoColumns || [];
     const m = p.meta || {};
     const cn = document.getElementById('clientName');
     const si = document.getElementById('sectorInput');
@@ -3195,43 +3198,70 @@ function renderSentiment() {
     </div>
   </div>`;
 
-  // ── ENPS Proportional breakdown ───────────────────────────────────────
-  if (nT > 0) {
+  // ── NPS vs Satisfaction scatter plot ─────────────────────────────────
+  const scatterData = [];
+  rows.forEach(r => {
+    const npsScore = parseScore(gv(r, C.ENPS));
+    const satScore = parseScore(gv(r, C.SAT));
+    if (npsScore !== null && satScore !== null) {
+      const tier = npsScore >= 9 ? 'promoter' : npsScore >= 7 ? 'passive' : 'detractor';
+      scatterData.push({ nps: npsScore, sat: satScore, tier });
+    }
+  });
+
+  if (scatterData.length > 0) {
+    const SW = 580, SH = 310;
+    const padL = 46, padR = 20, padT = 16, padB = 56;
+    const tw2 = SW - padL - padR, th2 = SH - padT - padB;
+    const xP = v => padL + (v / 10) * tw2;
+    const yP = v => padT + (1 - (v - 1) / 9) * th2;
+    const tierCol = { promoter:'#17E88F', passive:'#80BBAD', detractor:'#D2785A' };
+    const zones2 = [
+      { x0:0, x1:6.5, color:'#D2785A', label:'Detractors', lx:3.25 },
+      { x0:6.5, x1:8.5, color:'#80BBAD', label:'Passives', lx:7.5 },
+      { x0:8.5, x1:10, color:'#17E88F', label:'Promoters', lx:9.25 },
+    ];
+
+    let seed2 = 31; const rng2 = () => { seed2=(seed2*16807)%2147483647; return (seed2-1)/2147483646; };
+
+    let sc = `<svg viewBox="0 0 ${SW} ${SH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">`;
+    // Zone backgrounds
+    zones2.forEach(z => {
+      sc += `<rect x="${xP(z.x0).toFixed(1)}" y="${padT}" width="${(xP(z.x1)-xP(z.x0)).toFixed(1)}" height="${th2}" fill="${z.color}15"/>`;
+      sc += `<text x="${xP(z.lx).toFixed(1)}" y="${(padT+th2+38).toFixed(1)}" text-anchor="middle" font-size="10" fill="${z.color}" font-family="DM Sans,Arial,sans-serif" font-weight="700">${z.label}</text>`;
+    });
+    // Zone separator lines
+    [6.5, 8.5].forEach(v => {
+      sc += `<line x1="${xP(v).toFixed(1)}" y1="${padT}" x2="${xP(v).toFixed(1)}" y2="${padT+th2}" stroke="rgba(255,255,255,0.12)" stroke-width="1" stroke-dasharray="4,3"/>`;
+    });
+    // Grid lines + axis labels
+    for (let s=0; s<=10; s++) {
+      sc += `<line x1="${xP(s).toFixed(1)}" y1="${padT}" x2="${xP(s).toFixed(1)}" y2="${padT+th2}" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>`;
+      sc += `<text x="${xP(s).toFixed(1)}" y="${(padT+th2+16).toFixed(1)}" text-anchor="middle" font-size="9" fill="rgba(242,244,243,0.35)" font-family="DM Sans,Arial,sans-serif">${s}</text>`;
+    }
+    for (let s=1; s<=10; s++) {
+      sc += `<line x1="${padL}" y1="${yP(s).toFixed(1)}" x2="${padL+tw2}" y2="${yP(s).toFixed(1)}" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>`;
+      sc += `<text x="${(padL-6).toFixed(1)}" y="${(yP(s)+3.5).toFixed(1)}" text-anchor="end" font-size="9" fill="rgba(242,244,243,0.35)" font-family="DM Sans,Arial,sans-serif">${s}</text>`;
+    }
+    // Axes
+    sc += `<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT+th2}" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>`;
+    sc += `<line x1="${padL}" y1="${padT+th2}" x2="${padL+tw2}" y2="${padT+th2}" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>`;
+    // Axis titles
+    sc += `<text x="${(padL+tw2/2).toFixed(1)}" y="${(SH-6).toFixed(1)}" text-anchor="middle" font-size="10" fill="rgba(242,244,243,0.5)" font-family="DM Sans,Arial,sans-serif">NPS Score (0–10)</text>`;
+    sc += `<text transform="rotate(-90)" x="${(-(padT+th2/2)).toFixed(1)}" y="12" text-anchor="middle" font-size="10" fill="rgba(242,244,243,0.5)" font-family="DM Sans,Arial,sans-serif">Satisfaction Score (1–10)</text>`;
+    // Dots
+    scatterData.forEach(d => {
+      const jx = (rng2()-0.5)*10, jy = (rng2()-0.5)*10;
+      const cx = Math.max(padL+5, Math.min(padL+tw2-5, xP(d.nps)+jx));
+      const cy = Math.max(padT+5, Math.min(padT+th2-5, yP(d.sat)+jy));
+      sc += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="5.5" fill="${tierCol[d.tier]}" fill-opacity="0.72" stroke="${tierCol[d.tier]}" stroke-width="0.5"/>`;
+    });
+    sc += `</svg>`;
+
     html += `<div class="chart-card" style="margin-bottom:0.9rem">
-      <div class="chart-card-title">eNPS Response Breakdown <span>N=${nT}</span></div>
-      <div style="display:flex;align-items:center;gap:2.5rem;flex-wrap:wrap">
-        <div style="text-align:center;flex-shrink:0;min-width:90px">
-          <div style="font-family:'DM Serif Display',serif;font-size:3.6rem;line-height:1;color:${npsCol}">${nps !== null ? (nps >= 0 ? '+' : '') + nps : '—'}</div>
-          <div style="font-size:0.66rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted);margin-top:0.35rem">NPS Score</div>
-        </div>
-        <div style="flex:1;min-width:240px">
-          <div style="height:28px;display:flex;border-radius:6px;overflow:hidden;margin-bottom:1rem">
-            ${pP > 0 ? `<div style="width:${pP}%;background:#17E88F;"></div>` : ''}
-            ${paP > 0 ? `<div style="width:${paP}%;background:#80BBAD;"></div>` : ''}
-            ${dP > 0  ? `<div style="width:${dP}%;background:#D2785A;"></div>` : ''}
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem">
-            <div>
-              <div style="font-size:1.5rem;font-family:'DM Serif Display',serif;line-height:1;color:#17E88F">${pP}%</div>
-              <div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.2rem">Promoters · ${pro}</div>
-              <div style="font-size:0.66rem;color:rgba(242,244,243,0.35)">scored 9–10</div>
-            </div>
-            <div>
-              <div style="font-size:1.5rem;font-family:'DM Serif Display',serif;line-height:1;color:#80BBAD">${paP}%</div>
-              <div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.2rem">Passives · ${pas}</div>
-              <div style="font-size:0.66rem;color:rgba(242,244,243,0.35)">scored 7–8</div>
-            </div>
-            <div>
-              <div style="font-size:1.5rem;font-family:'DM Serif Display',serif;line-height:1;color:#D2785A">${dP}%</div>
-              <div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.2rem">Detractors · ${det}</div>
-              <div style="font-size:0.66rem;color:rgba(242,244,243,0.35)">scored 0–6</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div style="margin-top:0.85rem;font-size:0.72rem;color:var(--text-muted);border-top:1px solid var(--card-border);padding-top:0.55rem">
-        NPS = % Promoters − % Detractors &nbsp;·&nbsp; +30 or above is strong &nbsp;·&nbsp; +50 or above is excellent
-      </div>
+      <div class="chart-card-title">NPS vs. Satisfaction <span>N=${scatterData.length} · NPS ${nps !== null ? (nps>=0?'+':'')+nps : '—'}</span></div>
+      <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.8rem">Each dot is one respondent. X-axis = likelihood to recommend the office (eNPS 0–10). Y-axis = overall workplace satisfaction (1–10). Color = NPS tier.</div>
+      ${sc}
     </div>`;
   }
 
@@ -4109,7 +4139,7 @@ function downloadClientPackage() {
   if (btn) { btn.textContent = 'Generating…'; btn.disabled = true; }
 
   // Escape closing-script tags in JSON to avoid breaking the injected script block
-  const dataJson = JSON.stringify({ allRows, colIdx, meta: { clientName, sector, headcount } })
+  const dataJson = JSON.stringify({ allRows, colIdx, qTextsMap, extraDemoColumns, meta: { clientName, sector, headcount } })
                     .replace(/<\/script>/gi, '<\\/script>');
 
   const preloadScript = `<script>window.__PRELOADED__=${dataJson};<\/script>`;
