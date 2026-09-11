@@ -237,6 +237,28 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
 }
 .filter-select:focus { outline: none; border-color: rgba(23,232,143,0.4); }
 .filter-select option { background: #001A14; color: var(--text); }
+.multiselect-wrap { position: relative; display: inline-block; }
+.multiselect-btn {
+  background: rgba(255,255,255,0.06); border: 1px solid var(--card-border);
+  border-radius: 6px; padding: 0.38rem 1.9rem 0.38rem 0.65rem;
+  color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 0.78rem;
+  cursor: pointer; min-width: 130px; max-width: 200px; text-align: left;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative;
+}
+.multiselect-btn::after { content: '▾'; position: absolute; right: 0.55rem; top: 50%; transform: translateY(-50%); font-size: 0.68rem; color: var(--text-muted); pointer-events: none; }
+.multiselect-btn:focus { outline: none; border-color: rgba(23,232,143,0.4); }
+.multiselect-btn.ms-active { border-color: rgba(23,232,143,0.5); color: var(--accent); }
+.multiselect-panel {
+  display: none; position: absolute; z-index: 1000; top: calc(100% + 4px); left: 0;
+  background: #001A14; border: 1px solid var(--card-border); border-radius: 8px;
+  padding: 0.35rem; min-width: 210px; max-height: 280px; overflow-y: auto;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.55);
+}
+.multiselect-panel.open { display: block; }
+.ms-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.28rem 0.45rem; border-radius: 5px; cursor: pointer; font-size: 0.78rem; color: var(--text); user-select: none; }
+.ms-item:hover { background: rgba(255,255,255,0.07); }
+.ms-item input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; flex-shrink: 0; width: 14px; height: 14px; }
+.ms-item span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .reset-btn {
   padding: 0.38rem 0.85rem;
   background: transparent; color: var(--text-muted);
@@ -309,6 +331,7 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
 .bar-row { display: flex; align-items: center; gap: 0.7rem; }
 .bar-label { font-size: 0.76rem; color: var(--text); min-width: 215px; max-width: 240px; white-space: normal; line-height: 1.4; flex-shrink: 0; }
 .bar-track { flex: 1; height: 26px; display: flex; border-radius: 4px; overflow: hidden; min-width: 0; }
+.amm-chart .bar-track { flex: 1; }
 .bar-seg { display: flex; align-items: center; justify-content: center; font-size: 0.66rem; font-weight: 600; color: rgba(0,0,0,0.7); white-space: nowrap; overflow: hidden; }
 .bar-seg-lt { color: rgba(255,255,255,0.85); }
 .bar-avg { font-size: 0.72rem; font-weight: 600; color: var(--accent); min-width: 76px; text-align: right; flex-shrink: 0; white-space: nowrap; }
@@ -814,23 +837,38 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
       <div class="filters-row">
         <div class="filter-group">
           <span class="filter-label">Department</span>
-          <select class="filter-select" id="fDept" onchange="applyFilters()"><option value="">All Departments</option></select>
+          <div class="multiselect-wrap" id="fDept" data-alltext="All Departments">
+            <button class="multiselect-btn" type="button" onclick="toggleMultiselect('fDept')">All Departments</button>
+            <div class="multiselect-panel"></div>
+          </div>
         </div>
         <div class="filter-group">
           <span class="filter-label">Role</span>
-          <select class="filter-select" id="fRole" onchange="applyFilters()"><option value="">All Roles</option></select>
+          <div class="multiselect-wrap" id="fRole" data-alltext="All Roles">
+            <button class="multiselect-btn" type="button" onclick="toggleMultiselect('fRole')">All Roles</button>
+            <div class="multiselect-panel"></div>
+          </div>
         </div>
         <div class="filter-group">
           <span class="filter-label">Generation</span>
-          <select class="filter-select" id="fGen" onchange="applyFilters()"><option value="">All Generations</option></select>
+          <div class="multiselect-wrap" id="fGen" data-alltext="All Generations">
+            <button class="multiselect-btn" type="button" onclick="toggleMultiselect('fGen')">All Generations</button>
+            <div class="multiselect-panel"></div>
+          </div>
         </div>
         <div class="filter-group">
           <span class="filter-label">Tenure</span>
-          <select class="filter-select" id="fTenure" onchange="applyFilters()"><option value="">All Tenure</option></select>
+          <div class="multiselect-wrap" id="fTenure" data-alltext="All Tenure">
+            <button class="multiselect-btn" type="button" onclick="toggleMultiselect('fTenure')">All Tenure</button>
+            <div class="multiselect-panel"></div>
+          </div>
         </div>
         <div class="filter-group">
           <span class="filter-label">Office Frequency</span>
-          <select class="filter-select" id="fFreq" onchange="applyFilters()"><option value="">All Frequencies</option></select>
+          <div class="multiselect-wrap" id="fFreq" data-alltext="All Frequencies">
+            <button class="multiselect-btn" type="button" onclick="toggleMultiselect('fFreq')">All Frequencies</button>
+            <div class="multiselect-panel"></div>
+          </div>
         </div>
         <button class="reset-btn" onclick="resetFilters()">Reset</button>
         <button class="reset-btn" onclick="exportPDFReport()" style="color:var(--accent);border-color:rgba(23,232,143,0.35);margin-left:0.25rem">↓ Export PDF</button>
@@ -1255,29 +1293,81 @@ function resetApp() {
 }
 
 // ─── FILTERS ──────────────────────────────────────────────────────────────────
+// ─── MULTI-SELECT HELPERS ──────────────────────────────────────────────────────
+function filterVals(id) {
+  const wrap = document.getElementById(id);
+  if (!wrap) return [];
+  return Array.from(wrap.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+}
+
+function updateMultiselectLabel(id) {
+  const wrap = document.getElementById(id);
+  if (!wrap) return;
+  const btn = wrap.querySelector('.multiselect-btn');
+  if (!btn) return;
+  const allText = wrap.dataset.alltext || 'All';
+  const vals = filterVals(id);
+  if (vals.length === 0) { btn.textContent = allText; btn.classList.remove('ms-active'); }
+  else if (vals.length === 1) { btn.textContent = vals[0].length > 22 ? vals[0].slice(0, 20) + '…' : vals[0]; btn.classList.add('ms-active'); }
+  else { btn.textContent = `${vals.length} selected`; btn.classList.add('ms-active'); }
+}
+
+function toggleMultiselect(id) {
+  const wrap = document.getElementById(id);
+  if (!wrap) return;
+  const panel = wrap.querySelector('.multiselect-panel');
+  const isOpen = panel.classList.contains('open');
+  document.querySelectorAll('.multiselect-panel.open').forEach(p => p.classList.remove('open'));
+  if (!isOpen) panel.classList.add('open');
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.multiselect-wrap')) {
+    document.querySelectorAll('.multiselect-panel.open').forEach(p => p.classList.remove('open'));
+  }
+});
+
+function populateMultiselect(id, vals) {
+  const wrap = document.getElementById(id);
+  if (!wrap) return;
+  const panel = wrap.querySelector('.multiselect-panel');
+  if (!panel) return;
+  const prev = filterVals(id);
+  panel.innerHTML = vals.map(v => {
+    const checked = prev.includes(v) ? ' checked' : '';
+    const esc = v.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    return `<label class="ms-item"><input type="checkbox" value="${esc}"${checked} onchange="updateMultiselectLabel('${id}');applyFilters()"><span title="${esc}">${v}</span></label>`;
+  }).join('');
+  updateMultiselectLabel(id);
+}
+
 function buildFilters() {
+  const normOrd = s => s.toLowerCase().replace(/\s*[–—\-]+\s*/g,'-').replace(/\s+/g,' ').trim();
+  const PNTS = /prefer not (to say|to answer)/i;
   const FILTER_ORDERS = {
-    [C.ROLE]:   ['Leader of Leaders','Leader of ICs','Individual Contributor'],
-    [C.GEN]:    ['Born before 1965','Born 1965–1980','Born 1981–1996','Born 1997 or after','Prefer not to say'],
-    [C.TENURE]: ['Less than 1 year','1–2 years','3–5 years','6–10 years','10+ years'],
-    [C.FREQOFF]:['Never (fully remote)','Less than one day per week','1 day per week','2–3 days per week','4 days per week','Every day (5 days per week)'],
+    // Most senior → least senior
+    [C.ROLE]:   ['Leader of Leaders','Leader of Individual Contributors','Individual Contributor'],
+    // Oldest → youngest; prefer not to say pinned last by PNTS sort
+    [C.GEN]:    ['Born before 1965','Born 1965-1980','Born 1981-1996','Born 1997 or after'],
+    // Longest tenure → shortest
+    [C.TENURE]: ['10+ years','6-10 years','3-5 years','1-2 years','Less than 1 year'],
+    // Most frequent → least frequent
+    [C.FREQOFF]:['Every day (5 days per week)','4 days per week','2-3 days per week','1 day per week','Less than one day per week','Never (fully remote)'],
   };
-  [['fDept',C.DEPT],['fRole',C.ROLE],['fGen',C.GEN],['fTenure',C.TENURE],['fFreq',C.FREQOFF]].forEach(([id,col]) => {
-    const sel = document.getElementById(id);
-    const first = sel.options[0];
-    sel.innerHTML = '';
-    sel.appendChild(first);
+  [['fDept',C.DEPT,'All Departments'],['fRole',C.ROLE,'All Roles'],['fGen',C.GEN,'All Generations'],['fTenure',C.TENURE,'All Tenure'],['fFreq',C.FREQOFF,'All Frequencies']].forEach(([id,col,allText]) => {
     const order = FILTER_ORDERS[col];
     const vals = [...new Set(allRows.map(r => gv(r, col)).filter(v => v))];
     if (order) {
-      vals.sort((a,b) => { const ai=order.indexOf(a), bi=order.indexOf(b); return (ai<0?99:ai)-(bi<0?99:bi); });
+      const normOrder = order.map(normOrd);
+      vals.sort((a,b) => { const ai=normOrder.indexOf(normOrd(a)), bi=normOrder.indexOf(normOrd(b)); return (ai<0?99:ai)-(bi<0?99:bi); });
     } else {
       vals.sort();
     }
-    vals.forEach(v => {
-      const o = document.createElement('option');
-      o.value = v; o.textContent = v; sel.appendChild(o);
-    });
+    // Pin "Prefer not to say / answer" to bottom regardless of column
+    vals.sort((a,b) => (PNTS.test(a)?1:0)-(PNTS.test(b)?1:0));
+    const wrap = document.getElementById(id);
+    if (wrap) wrap.dataset.alltext = allText;
+    populateMultiselect(id, vals);
   });
 
   // Remove any extra filter groups from a previous file load
@@ -1288,12 +1378,14 @@ function buildFilters() {
     const fg = document.createElement('div');
     fg.className = 'filter-group extra-filter-group';
     const shortLabel = label.length > 32 ? label.slice(0, 29) + '…' : label;
+    const wrapId = `fExtra_${code}`;
     fg.innerHTML = `<span class="filter-label" title="${label}">${shortLabel}</span>
-      <select class="filter-select" id="fExtra_${code}" onchange="applyFilters()">
-        <option value="">All</option>
-        ${vals.map(v => `<option value="${v}">${v}</option>`).join('')}
-      </select>`;
+      <div class="multiselect-wrap" id="${wrapId}" data-alltext="All">
+        <button class="multiselect-btn" type="button" onclick="toggleMultiselect('${wrapId}')">All</button>
+        <div class="multiselect-panel"></div>
+      </div>`;
     filtersRow.insertBefore(fg, resetBtn);
+    populateMultiselect(wrapId, vals);
   });
 }
 
@@ -1307,22 +1399,19 @@ function updateClientName() {
 }
 
 function applyFilters() {
-  const dept = document.getElementById('fDept').value;
-  const role = document.getElementById('fRole').value;
-  const gen = document.getElementById('fGen').value;
-  const tenure = document.getElementById('fTenure').value;
-  const freq = document.getElementById('fFreq').value;
-  const extraFilters = extraDemoColumns.map(({ code }) => {
-    const el = document.getElementById(`fExtra_${code}`);
-    return { code, val: el ? el.value : '' };
-  });
+  const dept   = filterVals('fDept');
+  const role   = filterVals('fRole');
+  const gen    = filterVals('fGen');
+  const tenure = filterVals('fTenure');
+  const freq   = filterVals('fFreq');
+  const extraFilters = extraDemoColumns.map(({ code }) => ({ code, vals: filterVals(`fExtra_${code}`) }));
   filteredRows = allRows.filter(r =>
-    (!dept || gv(r,C.DEPT) === dept) &&
-    (!role || gv(r,C.ROLE) === role) &&
-    (!gen || gv(r,C.GEN) === gen) &&
-    (!tenure || gv(r,C.TENURE) === tenure) &&
-    (!freq || gv(r,C.FREQOFF) === freq) &&
-    extraFilters.every(({ code, val }) => !val || gv(r, code) === val)
+    (!dept.length   || dept.includes(gv(r,C.DEPT))) &&
+    (!role.length   || role.includes(gv(r,C.ROLE))) &&
+    (!gen.length    || gen.includes(gv(r,C.GEN))) &&
+    (!tenure.length || tenure.includes(gv(r,C.TENURE))) &&
+    (!freq.length   || freq.includes(gv(r,C.FREQOFF))) &&
+    extraFilters.every(({ code, vals }) => !vals.length || vals.includes(gv(r, code)))
   );
   const nBadge = document.getElementById('nBadge');
   if (nBadge) {
@@ -1338,10 +1427,14 @@ function applyFilters() {
 }
 
 function resetFilters() {
-  ['fDept','fRole','fGen','fTenure','fFreq'].forEach(id => document.getElementById(id).value = '');
+  ['fDept','fRole','fGen','fTenure','fFreq'].forEach(id => {
+    const wrap = document.getElementById(id);
+    if (wrap) { wrap.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false); updateMultiselectLabel(id); }
+  });
   extraDemoColumns.forEach(({ code }) => {
-    const el = document.getElementById(`fExtra_${code}`);
-    if (el) el.value = '';
+    const id = `fExtra_${code}`;
+    const wrap = document.getElementById(id);
+    if (wrap) { wrap.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false); updateMultiselectLabel(id); }
   });
   applyFilters();
 }
@@ -3987,7 +4080,7 @@ function downloadClientPackage() {
 })();
 <\/script>`;
 
-  fetch(window.location.pathname + window.location.search)
+  fetch(window.location.pathname + '?_v=' + Date.now())
     .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
     .then(html => {
       // Inject preload script — use lastIndexOf for </body> to avoid matching
