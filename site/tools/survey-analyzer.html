@@ -1388,6 +1388,7 @@ function initApp() {
     colIdx           = p.colIdx           || {};
     qTextsMap        = p.qTextsMap        || {};
     extraDemoColumns = p.extraDemoColumns || [];
+    if (p.cOverrides) Object.assign(C, p.cOverrides);
     const m = p.meta || {};
     const cn = document.getElementById('clientName');
     const si = document.getElementById('sectorInput');
@@ -4378,8 +4379,14 @@ function downloadClientPackage() {
   const origText = btn ? btn.textContent : '';
   if (btn) { btn.textContent = 'Generating…'; btn.disabled = true; }
 
+  // Capture auto-detected column code overrides so the client package uses the same mappings
+  const cOverrides = {};
+  ['DEPT','ROLE','GEN','TENURE','FREQOFF','COMMUTE','Q15'].forEach(k => {
+    if (typeof C[k] === 'string') cOverrides[k] = C[k];
+  });
+
   // Escape closing-script tags in JSON to avoid breaking the injected script block
-  const dataJson = JSON.stringify({ allRows, colIdx, qTextsMap, extraDemoColumns, meta: { clientName, sector, headcount } })
+  const dataJson = JSON.stringify({ allRows, colIdx, qTextsMap, extraDemoColumns, cOverrides, meta: { clientName, sector, headcount } })
                     .replace(/<\/script>/gi, '<\\/script>');
 
   const preloadScript = `<script>window.__PRELOADED__=${dataJson};<\/script>`;
