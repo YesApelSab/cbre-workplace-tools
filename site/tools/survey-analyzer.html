@@ -3470,8 +3470,8 @@ function renderSentiment() {
     sc += `<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT+th2}" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>`;
     sc += `<line x1="${padL}" y1="${padT+th2}" x2="${padL+tw2}" y2="${padT+th2}" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>`;
     // Axis titles
-    sc += `<text x="${(padL+tw2/2).toFixed(1)}" y="${(SH-6).toFixed(1)}" text-anchor="middle" font-size="10" fill="rgba(242,244,243,0.5)" font-family="DM Sans,Arial,sans-serif">NPS Score (0–10)</text>`;
-    sc += `<text transform="rotate(-90)" x="${(-(padT+th2/2)).toFixed(1)}" y="12" text-anchor="middle" font-size="10" fill="rgba(242,244,243,0.5)" font-family="DM Sans,Arial,sans-serif">Satisfaction Score (1–10)</text>`;
+    sc += `<text x="${(padL+tw2/2).toFixed(1)}" y="${(SH-6).toFixed(1)}" text-anchor="middle" font-size="10" fill="rgba(242,244,243,0.5)" font-family="DM Sans,Arial,sans-serif">NPS Score</text>`;
+    sc += `<text transform="rotate(-90)" x="${(-(padT+th2/2)).toFixed(1)}" y="12" text-anchor="middle" font-size="10" fill="rgba(242,244,243,0.5)" font-family="DM Sans,Arial,sans-serif">Satisfaction Score</text>`;
     // Bubbles (draw larger ones first so smaller ones sit on top)
     cells.sort((a,b) => b.count - a.count).forEach(c => {
       const cx = xP(c.nps), cy = yP(c.sat), r = radiusFor(c.count);
