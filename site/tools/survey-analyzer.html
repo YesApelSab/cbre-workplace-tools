@@ -902,9 +902,12 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
 <script>
 // Capture pristine HTML source after DOM is fully parsed.
 let __PAGE_SOURCE__ = '';
-document.addEventListener('DOMContentLoaded', () => {
-  __PAGE_SOURCE__ = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
-});
+const _capturePageSource = () => { __PAGE_SOURCE__ = '<!DOCTYPE html>\n' + document.documentElement.outerHTML; };
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _capturePageSource);
+} else {
+  _capturePageSource();
+}
 
 // ─── COLUMN DEFINITIONS ───────────────────────────────────────────────────────
 const C = {
@@ -4403,6 +4406,7 @@ function downloadClientPackage() {
   // __PAGE_SOURCE__ is set once at script start before any DOM changes.
   (function() {
     try {
+      if (!__PAGE_SOURCE__) { alert('Page source not ready — please try again in a moment.'); return; }
       let html = __PAGE_SOURCE__;
       html = html.replace(/<head>/i, () => '<head>' + preloadScript);
       html = html + '\n' + autoloadScript;
