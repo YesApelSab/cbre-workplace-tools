@@ -2554,10 +2554,10 @@ function renderFuture() {
   ammData.forEach(({label,off,bld,nbr,not,tot}) => {
     if(!tot) return;
     const segData = [
-      {w:pct(off,tot), color:'#003F2D', name:'Within office',   textColor:'rgba(255,255,255,0.9)'},
-      {w:pct(bld,tot), color:'#17E88F', name:'Within building', textColor:'rgba(0,0,0,0.7)'},
-      {w:pct(nbr,tot), color:'#D2785A', name:'Neighborhood',    textColor:'rgba(0,0,0,0.7)'},
       {w:pct(not,tot), color:'#8B1A1A', name:'Not important',   textColor:'rgba(255,255,255,0.9)'},
+      {w:pct(nbr,tot), color:'#D2785A', name:'Neighborhood',    textColor:'rgba(0,0,0,0.7)'},
+      {w:pct(bld,tot), color:'#17E88F', name:'Within building', textColor:'rgba(0,0,0,0.7)'},
+      {w:pct(off,tot), color:'#003F2D', name:'Within office',   textColor:'rgba(255,255,255,0.9)'},
     ];
     const track = buildStackedTrack(segData);
     html += `<div class="bar-row"><span class="bar-label" title="${label}">${label}</span>${track}<span class="bar-avg" style="visibility:hidden;pointer-events:none" aria-hidden="true">—</span></div>`;
