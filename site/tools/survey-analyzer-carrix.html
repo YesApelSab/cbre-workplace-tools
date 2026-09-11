@@ -1378,6 +1378,17 @@ function renderActive() {
 // Shared stacked track builder — labels inside when segment ≥ 6%, floated above for smaller ones
 function buildStackedTrack(segData) {
   const INSIDE_MIN = 6;
+  // Largest-remainder rounding: segments must sum to exactly 100 so the track fills fully
+  const rawSum = segData.reduce((s, d) => s + d.w, 0);
+  if (rawSum > 0) {
+    const scale = 100 / rawSum;
+    const exact = segData.map(d => d.w * scale);
+    const floored = exact.map(v => Math.floor(v));
+    let deficit = 100 - floored.reduce((s, v) => s + v, 0);
+    const byRem = exact.map((v, i) => [i, v - Math.floor(v)]).sort((a, b) => b[1] - a[1]);
+    byRem.slice(0, deficit).forEach(([i]) => floored[i]++);
+    segData = segData.map((d, i) => ({ ...d, w: floored[i] }));
+  }
   let cum = 0;
   const processed = segData.filter(s => s.w > 0).map(s => {
     const mid = cum + s.w / 2;
