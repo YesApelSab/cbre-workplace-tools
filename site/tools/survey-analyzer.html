@@ -4250,6 +4250,7 @@ function downloadClientPackage() {
 (function(){
   if(!window.__PRELOADED__)return;
   var pkgBtn=document.getElementById('clientPkgBtn');if(pkgBtn)pkgBtn.remove();
+  var expInstr=document.querySelector('.export-instructions');if(expInstr)expInstr.remove();
   var zone=document.getElementById('uploadZone');
   if(zone){
     zone.style.cssText='display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem 1rem;gap:0.75rem;border:1px solid rgba(23,232,143,0.2);border-radius:12px;background:rgba(23,232,143,0.04)';
