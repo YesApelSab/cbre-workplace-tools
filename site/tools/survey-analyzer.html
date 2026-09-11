@@ -749,8 +749,10 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
     <!-- SIDEBAR NAV -->
     <div class="sidebar">
       <button onclick="resetApp()" class="sidebar-reset-btn" style="width:100%;text-align:left;background:rgba(255,255,255,0.05);border:1px solid var(--card-border);border-radius:6px;padding:0.5rem 0.75rem;font-size:0.74rem;color:var(--text-muted);cursor:pointer;margin-bottom:1rem;font-family:inherit">← New file / Reset</button>
+      <button class="tab-btn active" data-tab="execsummary" style="color:var(--accent);font-weight:700">⚡ Executive Summary</button>
+      <div class="tab-sep"></div>
       <span class="tab-group-label">Standard Reporting</span>
-      <button class="tab-btn active" data-tab="demographics">Demographics</button>
+      <button class="tab-btn" data-tab="demographics">Demographics</button>
       <button class="tab-btn" data-tab="space">Space, Design &amp; Function</button>
       <button class="tab-btn" data-tab="relationships">Relationships &amp; Collaboration</button>
       <button class="tab-btn" data-tab="wvp">WVP &amp; Attachment</button>
@@ -838,7 +840,13 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
 
     <div id="columnWarning" style="display:none;padding:0.5rem 0.75rem 0"></div>
 
-    <div class="section-panel active" id="tab-demographics">
+    <div class="section-panel active" id="tab-execsummary">
+      <h2 class="section-heading">Executive Summary</h2>
+      <p class="section-sub">Key takeaways from all sections, auto-generated from survey data.</p>
+      <div id="execSummaryContent"></div>
+    </div>
+
+    <div class="section-panel" id="tab-demographics">
       <h2 class="section-heading">Demographics</h2>
       <p class="section-sub">Breakdown of survey respondents by key demographic segments.</p>
       <div class="field-notice" id="demoNotice" style="display:none"></div>
@@ -1601,7 +1609,7 @@ function renderActive() {
     const el = document.getElementById(id);
     if (el) el.closest('.client-name-wrap').style.display = isDemoTab ? '' : 'none';
   });
-  const fns = { demographics: renderDemo, space: renderSpace, relationships: renderRel, wvp: renderWVP, future: renderFuture, attendance: renderAttendance, workstyles: renderWorkStyles, sentiment: renderSentiment };
+  const fns = { execsummary: renderExecSummary, demographics: renderDemo, space: renderSpace, relationships: renderRel, wvp: renderWVP, future: renderFuture, attendance: renderAttendance, workstyles: renderWorkStyles, sentiment: renderSentiment };
   if (fns[tab]) fns[tab]();
 }
 
@@ -1699,6 +1707,123 @@ function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>
 
 
 // ─── DEMOGRAPHICS ─────────────────────────────────────────────────────────────
+// ─── EXECUTIVE SUMMARY ────────────────────────────────────────────────────────
+function renderExecSummary() {
+  const rows = filteredRows;
+  const toNum = v => v !== null ? v : 0;
+  let html = '';
+
+  // ── Key Metrics stat row ───────────────────────────────────────────────
+  // NPS
+  let pro=0,pas=0,det=0,nT=0;
+  rows.forEach(r => { const v=parseScore(gv(r,C.ENPS)); if(v===null)return; nT++; if(v>=9)pro++; else if(v>=7)pas++; else det++; });
+  const nps = nT ? Math.round((pro/nT - det/nT)*100) : null;
+  const npsCol = nps===null?'var(--text-muted)':nps>=30?'#17E88F':nps>=0?'#80BBAD':'#D2785A';
+  // SAT
+  const satVals = rows.map(r=>parseScore(gv(r,C.SAT))).filter(v=>v!==null);
+  const satAvg = satVals.length ? (satVals.reduce((s,v)=>s+v,0)/satVals.length).toFixed(1) : null;
+  const satCol = satAvg===null?'var(--text-muted)':parseFloat(satAvg)>=7?'#17E88F':parseFloat(satAvg)>=5?'#80BBAD':'#D2785A';
+  // WVP
+  const wvpCols = C.WVP || [];
+  const wvpAvgs = wvpCols.map(col => likertDist(rows,col).avg).filter(v=>v!==null);
+  const wvpComp = wvpAvgs.length ? Math.round((wvpAvgs.reduce((s,v)=>s+v,0)/wvpAvgs.length - 1)/3*100) : null;
+  const wvpCol = wvpComp===null?'var(--text-muted)':wvpComp>=70?'#17E88F':wvpComp>=50?'#80BBAD':'#D2785A';
+
+  html += `<div class="cards-grid" style="margin-bottom:1.5rem">
+    <div class="stat-card"><div class="stat-card-value">${rows.length}</div><div class="stat-card-label">Respondents</div><div class="stat-card-sub">${filteredRows.length < allRows.length ? `of ${allRows.length} total` : 'in this dataset'}</div></div>
+    <div class="stat-card" style="border-color:${npsCol}33;background:${npsCol}0d"><div class="stat-card-value" style="color:${npsCol}">${nps!==null?(nps>=0?'+':'')+nps:'—'}</div><div class="stat-card-label">Employee NPS</div><div class="stat-card-sub">${nps===null?'No data':nps>=30?'Strong':nps>=0?'Moderate':'At risk'}</div></div>
+    <div class="stat-card" style="border-color:${satCol}33;background:${satCol}0d"><div class="stat-card-value" style="color:${satCol}">${satAvg!==null?satAvg+'/10':'—'}</div><div class="stat-card-label">Satisfaction</div><div class="stat-card-sub">${satAvg===null?'No data':parseFloat(satAvg)>=7?'Strong':parseFloat(satAvg)>=5?'Moderate':'Low'}</div></div>
+    <div class="stat-card" style="border-color:${wvpCol}33;background:${wvpCol}0d"><div class="stat-card-value" style="color:${wvpCol}">${wvpComp!==null?wvpComp+'/100':'—'}</div><div class="stat-card-label">WVP Score</div><div class="stat-card-sub">${wvpComp===null?'No data':wvpComp>=70?'Strong attachment':wvpComp>=50?'Moderate':'Low attachment'}</div></div>
+  </div>`;
+
+  const insightCard = (icon, title, items) => {
+    if (!items.length) return '';
+    const bullets = items.slice(0,3).map(ins =>
+      `<div class="insight-item"><span class="insight-item-icon">${ins.icon}</span><span>${ins.text}</span></div>`
+    ).join('');
+    return `<div class="insight-summary-card" style="margin-bottom:1rem">
+      <div class="insight-summary-header"><span class="insight-summary-icon">${icon}</span><span>${title}</span><span class="insight-summary-tag">auto-generated from survey data</span></div>
+      <div class="insight-list">${bullets}</div>
+    </div>`;
+  };
+
+  // ── Space, Design & Function ───────────────────────────────────────────
+  const supplyItems = C.SSUPPLY.map((col,i) => { const d=supplyDist(rows,col); return {label:C.SSUPPLY_L[i], tooLittlePct:d.t?pct(d.l,d.t):0, rightPct:d.t?pct(d.r,d.t):0}; });
+  const worstSupply = [...supplyItems].sort((a,b)=>b.tooLittlePct-a.tooLittlePct)[0];
+  const bestSupply  = [...supplyItems].sort((a,b)=>b.rightPct-a.rightPct)[0];
+  const funcItems   = C.SFUNC.map((col,i)=>({label:C.SFUNC_L[i],...likertDist(rows,col)})).filter(d=>d.avg!==null);
+  const lowestFunc  = funcItems.length ? [...funcItems].sort((a,b)=>(a.avg||0)-(b.avg||0))[0] : null;
+  const highestFunc = funcItems.length ? [...funcItems].sort((a,b)=>(b.avg||0)-(a.avg||0))[0] : null;
+  const vibeQ = avg(numVals(rows,'VIBE.QUIET'))||0;
+  const vibeD = avg(numVals(rows,'VIBE.DYNAMIC'))||0;
+  const spaceIns = [];
+  if (worstSupply && worstSupply.tooLittlePct > 0) {
+    spaceIns.push(worstSupply.tooLittlePct >= 40
+      ? { icon:'⚠️', text:`<strong>${worstSupply.tooLittlePct}% of respondents say ${worstSupply.label.toLowerCase()} are insufficient</strong> — the most cited supply gap and highest-priority space addition to consider.` }
+      : { icon:'📦', text:`<strong>${worstSupply.label}</strong> has the largest perceived shortage, with ${worstSupply.tooLittlePct}% saying there is too little. ${bestSupply.rightPct > 60 ? `By contrast, ${bestSupply.label.toLowerCase()} are widely seen as well-stocked (${bestSupply.rightPct}% right amount).` : ''}` });
+  }
+  if (lowestFunc) spaceIns.push({ icon:'🔧', text:`<strong>${lowestFunc.label}</strong> is the lowest-rated functionality item (avg ${lowestFunc.avg?.toFixed(1)}/4). <strong>${highestFunc?.label}</strong> scores highest at ${highestFunc?.avg?.toFixed(1)}/4.` });
+  if (vibeD > 0 || vibeQ > 0) { const lean = vibeQ > vibeD ? 'quieter, library-like' : 'dynamic, energetic'; spaceIns.push({ icon:'🎧', text:`Employees prefer to spend <strong>${Math.round(vibeQ>vibeD?vibeQ:vibeD)}% of their time in a ${lean} environment</strong>. Design should prioritize ${vibeQ>vibeD?'acoustic comfort and focus-friendly zones':'collaborative, activating spaces'}.` }); }
+  html += insightCard('🏢', 'Space, Design & Function', spaceIns);
+
+  // ── Relationships & Collaboration ─────────────────────────────────────
+  const timeWithOthers = Math.round(avg(numVals(rows,C.TIME_O))||0);
+  const scheduledPct   = Math.round(avg(numVals(rows,C.COL_S))||0);
+  const unscheduledPct = Math.round(avg(numVals(rows,C.COL_U))||0);
+  const relItems  = C.REL.map((col,i)=>({label:C.REL_L[i],...likertDist(rows,col)})).filter(d=>d.avg!==null);
+  const lowestRel  = relItems.length ? [...relItems].sort((a,b)=>toNum(a.avg)-toNum(b.avg))[0] : null;
+  const highestRel = relItems.length ? [...relItems].sort((a,b)=>toNum(b.avg)-toNum(a.avg))[0] : null;
+  const learnItems = C.LEARN.map((col,i)=>({label:C.LEARN_L[i],...likertDist(rows,col)})).filter(d=>d.avg!==null);
+  const topLearn   = learnItems.length ? [...learnItems].sort((a,b)=>toNum(b.avg)-toNum(a.avg))[0] : null;
+  const relIns = [];
+  if (timeWithOthers > 0) { const collab = timeWithOthers>=60?'highly collaborative':timeWithOthers>=40?'balanced':'individually oriented'; relIns.push({ icon:'🤝', text:`Employees spend <strong>${timeWithOthers}% of work time with others</strong>, characterizing the workforce as <strong>${collab}</strong>. ${unscheduledPct>40?`${unscheduledPct}% of that time is unscheduled — spontaneous interaction is a key feature of the workplace.`:`Most collaboration (${scheduledPct}%) is planned and scheduled.`}` }); }
+  if (lowestRel && highestRel) relIns.push({ icon:'👥', text:`<strong>${lowestRel.label}</strong> is the lowest-rated relationship dimension (avg ${lowestRel.avg?.toFixed(1)||'—'}/4) and highest-priority connection to strengthen. <strong>${highestRel.label}</strong> scores strongest at ${highestRel.avg?.toFixed(1)||'—'}/4.` });
+  if (topLearn) relIns.push({ icon:'📚', text:`The most important in-office activity is <strong>${topLearn.label}</strong> (${topLearn.avg?.toFixed(1)||'—'}/4).` });
+  html += insightCard('🤝', 'Relationships & Collaboration', relIns);
+
+  // ── WVP & Attachment ──────────────────────────────────────────────────
+  const wvpItems = wvpCols.map((col,i)=>({label:(C.WVP_L||[])[i]||col,...likertDist(rows,col)})).filter(d=>d.avg!==null);
+  const wvpSorted = [...wvpItems].sort((a,b)=>toNum(b.avg)-toNum(a.avg));
+  const wvpIns = [];
+  if (wvpComp !== null) { const health=wvpComp>=70?'strong':wvpComp>=50?'moderate':'developing'; const note=wvpComp>=70?'Employees broadly identify with the organization\'s culture and values.':wvpComp>=50?'There is meaningful connection, but pockets of disengagement exist.':'Attachment levels are low — cultural investment should be prioritized.'; wvpIns.push({ icon:'🏆', text:`The WVP Composite Score is <strong>${wvpComp}/100</strong>, indicating <strong>${health} overall attachment</strong>. ${note}` }); }
+  if (wvpSorted.length > 1) wvpIns.push({ icon:'⭐', text:`<strong>${wvpSorted[0].label}</strong> is the highest-scoring WVP dimension (${wvpSorted[0].avg?.toFixed(1)}/4) — a cultural asset to protect. <strong>${wvpSorted[wvpSorted.length-1].label}</strong> scores lowest (${wvpSorted[wvpSorted.length-1].avg?.toFixed(1)}/4) — the highest-leverage improvement area.` });
+  const below25 = wvpItems.filter(d=>d.avg!==null&&d.avg<2.5).length;
+  if (below25 > 0) wvpIns.push({ icon:'⚠️', text:`<strong>${below25} of ${wvpItems.length} WVP dimensions score below 2.5/4</strong> — meaningful proportions of employees disagree, representing systemic culture risk.` });
+  html += insightCard('💡', 'WVP & Attachment', wvpIns);
+
+  // ── Future Preferences ────────────────────────────────────────────────
+  const locCanonical = [
+    { key:'fully remote',   pat:['fully remote','fully at home'] },
+    { key:'mostly home',    pat:['mostly home','mostly remote','mostly at home'] },
+    { key:'equal mix',      pat:['equal mix','equally','equal split','50'] },
+    { key:'mostly office',  pat:['mostly office','mostly at the office','mostly at the main'] },
+    { key:'fully office',   pat:['fully office','fully at the office','fully at the main'] },
+  ];
+  const matchLC = (raw, e) => { const r=raw.toLowerCase().trim(); return e.pat.some(p=>r===p||r.includes(p)); };
+  const lc = countBy(rows, C.Q45);
+  const locTotal = Object.values(lc).reduce((s,v)=>s+v, 0);
+  const locEnts = Object.entries(lc).filter(([,c])=>c>0).map(([rawLabel,cnt])=>({ rawLabel, n:cnt, canon:locCanonical.find(c=>matchLC(rawLabel,c)) })).sort((a,b)=>{ const ai=locCanonical.findIndex(c=>matchLC(a.rawLabel,c)), bi=locCanonical.findIndex(c=>matchLC(b.rawLabel,c)); return (ai<0?99:ai)-(bi<0?99:bi); });
+  const tilePct2 = e => locTotal ? pct(e.n, locTotal) : 0;
+  const officePct = locEnts.filter(e=>e.canon&&(e.canon.key==='mostly office'||e.canon.key==='fully office')).reduce((s,e)=>s+tilePct2(e),0);
+  const remotePct = locEnts.filter(e=>e.canon&&(e.canon.key==='fully remote'||e.canon.key==='mostly home')).reduce((s,e)=>s+tilePct2(e),0);
+  const hybridPct = locEnts.filter(e=>e.canon&&e.canon.key==='equal mix').reduce((s,e)=>s+tilePct2(e),0);
+  const rb = C.RBEN.map((col,i)=>({label:C.RBEN_L[i],p:cbPct(rows,col)})).sort((a,b)=>b.p-a.p);
+  const ob = C.OBEN.map((col,i)=>({label:C.OBEN_L[i],p:cbPct(rows,col)})).sort((a,b)=>b.p-a.p);
+  const futIns = [];
+  if (locTotal > 0) { let locS=''; if(officePct>=50)locS=`<strong>${officePct}% prefer office-dominant arrangements</strong>, signaling continued demand for dedicated workspace.`; else if(remotePct>=50)locS=`<strong>${remotePct}% prefer remote-dominant arrangements</strong>, suggesting strong appetite for flexible/distributed work.`; else if(hybridPct>=35)locS=`<strong>Hybrid is the dominant preference at ${hybridPct}%</strong>, with office-leaning at ${officePct}% and remote-leaning at ${remotePct}%.`; else locS=`<strong>Work location preferences are split</strong> — office-leaning ${officePct}%, hybrid ${hybridPct}%, remote-leaning ${remotePct}%.`; futIns.push({ icon:'📍', text:locS }); }
+  if (rb.length && rb[0].p>0) futIns.push({ icon:'🏠', text:`<strong>${rb[0].label} (${rb[0].p}%)</strong> is the top remote work benefit — hybrid policies should preserve this advantage.` });
+  if (ob.length && ob[0].p>0) futIns.push({ icon:'🏢', text:`<strong>${ob[0].label} (${ob[0].p}%)</strong> is the leading reason employees come to the office — design the in-office experience around this driver.` });
+  html += insightCard('🔭', 'Future Preferences', futIns);
+
+  // ── Sentiment ─────────────────────────────────────────────────────────
+  const sentIns = [];
+  if (nps !== null) { const label=nps>=30?'strong':nps>=0?'moderate — room to grow':'below zero, indicating more detractors than promoters'; const pasPct=nT?pct(pas,nT):0; sentIns.push({ icon:'📊', text:`The eNPS score is <strong>${nps>=0?'+':''}${nps}</strong>, which is ${label}. ${pasPct>40?`With ${pasPct}% passives, a meaningful share of employees could shift either direction — engagement programming could convert them to promoters.`:''}` }); }
+  if (satAvg !== null) { const label=parseFloat(satAvg)>=7?'strong workplace satisfaction':'room for improvement in overall satisfaction'; sentIns.push({ icon:'⭐', text:`Overall satisfaction averages <strong>${satAvg}/10</strong>, indicating ${label}.` }); }
+  html += insightCard('💬', 'Sentiment Analysis', sentIns);
+
+  document.getElementById('execSummaryContent').innerHTML = html;
+}
+
 function renderDemo() {
   const rows = filteredRows;
   const fieldW = rows.filter(r => { const f = gv(r,C.FREQOFF).toLowerCase(); return f.includes('less than one day') || f === 'never'; }).length;
