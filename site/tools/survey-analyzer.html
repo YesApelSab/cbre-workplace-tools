@@ -1686,6 +1686,10 @@ function hBar(label, val, color) {
 function likertLegend() {
   return `<div class="chart-legend">${L5_LABELS.map((l,i) => `<div class="legend-item"><div class="legend-dot" style="background:${L5_COLORS[i]}"></div>${l}</div>`).join('')}</div>`;
 }
+function likertLegendImportance() {
+  const IMP_LABELS = ['Not important','Somewhat important','Important','Very important'];
+  return `<div class="chart-legend">${IMP_LABELS.map((l,i) => `<div class="legend-item"><div class="legend-dot" style="background:${L5_COLORS[i]}"></div>${l}</div>`).join('')}</div>`;
+}
 
 function donutSVG(segs, size) {
   size = size || 130;
@@ -2122,14 +2126,14 @@ function renderRel() {
   const ld = C.LEARN.map((col,i) => ({label:C.LEARN_L[i],...likertDist(rows,col),orgAvg:isFilteredR?likertDist(allRows,col).avg:null})).sort((a,b)=>(b.avg||0)-(a.avg||0));
   html += `<div class="chart-card"><div class="chart-card-title">In-Office Activity Importance <span>avg 1–4</span></div><div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem">How important is being physically in the office for each of the following activities?</div><div class="stacked-chart">`;
   ld.forEach(d => html += stackedBar(d.label, d.d, d.t, d.avg, null, d.orgAvg));
-  html += `</div>${likertLegend()}</div>`;
+  html += `</div>${likertLegendImportance()}</div>`;
 
   // Social
   html += GRP_HDR('Social');
   const sd = C.SOC.map((col,i) => ({label:C.SOC_L[i],...likertDist(rows,col),orgAvg:isFilteredR?likertDist(allRows,col).avg:null})).sort((a,b)=>(b.avg||0)-(a.avg||0));
   html += `<div class="chart-card"><div class="chart-card-title">Social Opportunity Importance</div><div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem">How important are the following social activities to your overall in-office experience?</div><div class="stacked-chart">`;
   sd.forEach(d => html += stackedBar(d.label, d.d, d.t, d.avg, null, d.orgAvg));
-  html += `</div>${likertLegend()}</div>`;
+  html += `</div>${likertLegendImportance()}</div>`;
 
   // Hosting
   html += GRP_HDR('Hosting');
