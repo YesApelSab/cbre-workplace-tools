@@ -900,6 +900,10 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
 </div><!-- /page -->
 
 <script>
+// Capture pristine HTML source at load time — used by downloadClientPackage so
+// it never depends on a server fetch (which can return a stale CDN-cached copy).
+const __PAGE_SOURCE__ = document.documentElement.outerHTML;
+
 // ─── COLUMN DEFINITIONS ───────────────────────────────────────────────────────
 const C = {
   DEPT:'Q3', ROLE:'Q4', GEN:'Q5', TENURE:'Q6', FREQOFF:'FREQOFF',
@@ -4393,11 +4397,11 @@ function downloadClientPackage() {
 })();
 <\/script>`;
 
-  fetch(window.location.pathname + '?_v=' + Date.now())
-    .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
-    .then(html => {
-      // Inject preload script — use lastIndexOf for </body> to avoid matching
-      // the literal </body> inside exportPDFReport's R2 template string
+  // Use the source captured at page-load time — immune to CDN caching.
+  // __PAGE_SOURCE__ is set once at script start before any DOM changes.
+  (function() {
+    try {
+      let html = '<!DOCTYPE html>\n' + __PAGE_SOURCE__;
       html = html.replace(/<head>/i, () => '<head>' + preloadScript);
       const bodyClose = html.lastIndexOf('</body>');
       if (bodyClose !== -1) {
@@ -4409,9 +4413,12 @@ function downloadClientPackage() {
       const a    = document.createElement('a');
       a.href = url; a.download = (slug || 'client') + '-survey-report.html'; a.click();
       URL.revokeObjectURL(url);
-    })
-    .catch(() => alert('Could not fetch page source. Make sure you are viewing the live site (not a local file) when generating the package.'))
-    .finally(() => { if (btn) { btn.textContent = origText; btn.disabled = false; } });
+    } catch(e) {
+      alert('Could not generate client package: ' + e.message);
+    } finally {
+      if (btn) { btn.textContent = origText; btn.disabled = false; }
+    }
+  })();
 }
 
 function loadSampleData() {
