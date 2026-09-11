@@ -535,6 +535,23 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
 .getting-started li { font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; }
 .getting-started li strong { color: var(--text); font-weight: 600; }
 
+.export-instructions {
+  background: rgba(255,197,61,0.06); border: 1px solid rgba(255,197,61,0.25);
+  border-radius: var(--radius); padding: 1.25rem 1.4rem; margin-bottom: 1rem;
+}
+.export-instructions-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.55rem; }
+.export-instructions-icon { font-size: 1rem; }
+.export-instructions-title { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,197,61,0.85); }
+.export-instructions-lead { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem; }
+.export-steps { display: flex; flex-direction: column; gap: 0.55rem; }
+.export-step { display: flex; gap: 0.75rem; align-items: flex-start; }
+.export-step-num { flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%; background: rgba(255,197,61,0.18); border: 1px solid rgba(255,197,61,0.35); color: rgba(255,197,61,0.9); font-size: 0.68rem; font-weight: 700; display: flex; align-items: center; justify-content: center; margin-top: 1px; }
+.export-step-body { font-size: 0.8rem; color: var(--text-muted); line-height: 1.55; }
+.export-step-body strong { color: var(--text); font-weight: 600; }
+.export-step-body em { font-style: normal; color: var(--text); }
+.export-step-body code { background: rgba(255,255,255,0.08); border-radius: 3px; padding: 0.1em 0.35em; font-size: 0.78em; color: var(--accent); font-family: monospace; }
+.export-not { color: #F96167; font-weight: 600; font-style: normal; }
+
 .upload-compact {
   display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
   background: var(--card-bg);
@@ -656,6 +673,29 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
         <li>Use <strong>Module Outputs</strong> for scored models and analytical insights</li>
         <li>Apply demographic filters on any page to explore different workforce segments</li>
       </ol>
+    </div>
+
+    <!-- Export Instructions -->
+    <div class="export-instructions">
+      <div class="export-instructions-header">
+        <span class="export-instructions-icon">⚙️</span>
+        <span class="export-instructions-title">Key Survey Export Instruction</span>
+      </div>
+      <p class="export-instructions-lead">Before exporting your data from Qualtrics, one setting is critical:</p>
+      <div class="export-steps">
+        <div class="export-step">
+          <div class="export-step-num">1</div>
+          <div class="export-step-body">In Qualtrics, go to <strong>Data &amp; Analysis → Export &amp; Import → Export Data</strong> and choose <strong>CSV</strong>.</div>
+        </div>
+        <div class="export-step">
+          <div class="export-step-num">2</div>
+          <div class="export-step-body">Click <strong>More Options</strong> and set <em>Use question labels</em> to <strong>Question references</strong> — <span class="export-not">not</span> "Identifiers". This ensures column headers appear as codes like <code>POSVBM.A1</code> rather than generic IDs the tool cannot read.</div>
+        </div>
+        <div class="export-step">
+          <div class="export-step-num">3</div>
+          <div class="export-step-body">Leave all other defaults in place and download the file. The first three rows (question codes, labels, sub-labels) must remain intact — do not delete them before uploading.</div>
+        </div>
+      </div>
     </div>
 
     <!-- Methodology explanation -->
