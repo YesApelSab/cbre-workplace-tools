@@ -1409,20 +1409,29 @@ function populateMultiselect(id, vals) {
 }
 
 function buildFilters() {
+  const normOrd = s => s.toLowerCase().replace(/\s*[–—\-]+\s*/g,'-').replace(/\s+/g,' ').trim();
+  const PNTS = /prefer not (to say|to answer)/i;
   const FILTER_ORDERS = {
-    [C.ROLE]:   ['Leader of Leaders','Leader of ICs','Individual Contributor'],
-    [C.GEN]:    ['Born before 1965','Born 1965–1980','Born 1981–1996','Born 1997 or after','Prefer not to say'],
-    [C.TENURE]: ['Less than 1 year','1–2 years','3–5 years','6–10 years','10+ years'],
-    [C.FREQOFF]:['Never (fully remote)','Less than one day per week','1 day per week','2–3 days per week','4 days per week','Every day (5 days per week)'],
+    // Most senior → least senior
+    [C.ROLE]:   ['Leader of Leaders','Leader of Individual Contributors','Individual Contributor'],
+    // Oldest → youngest; prefer not to say pinned last by PNTS sort
+    [C.GEN]:    ['Born before 1965','Born 1965-1980','Born 1981-1996','Born 1997 or after'],
+    // Longest tenure → shortest
+    [C.TENURE]: ['10+ years','6-10 years','3-5 years','1-2 years','Less than 1 year'],
+    // Most frequent → least frequent
+    [C.FREQOFF]:['Every day (5 days per week)','4 days per week','2-3 days per week','1 day per week','Less than one day per week','Never (fully remote)'],
   };
   [['fDept',C.DEPT,'All Departments'],['fRole',C.ROLE,'All Roles'],['fGen',C.GEN,'All Generations'],['fTenure',C.TENURE,'All Tenure'],['fFreq',C.FREQOFF,'All Frequencies']].forEach(([id,col,allText]) => {
     const order = FILTER_ORDERS[col];
     const vals = [...new Set(allRows.map(r => gv(r, col)).filter(v => v))];
     if (order) {
-      vals.sort((a,b) => { const ai=order.indexOf(a), bi=order.indexOf(b); return (ai<0?99:ai)-(bi<0?99:bi); });
+      const normOrder = order.map(normOrd);
+      vals.sort((a,b) => { const ai=normOrder.indexOf(normOrd(a)), bi=normOrder.indexOf(normOrd(b)); return (ai<0?99:ai)-(bi<0?99:bi); });
     } else {
       vals.sort();
     }
+    // Pin "Prefer not to say / answer" to bottom regardless of column
+    vals.sort((a,b) => (PNTS.test(a)?1:0)-(PNTS.test(b)?1:0));
     const wrap = document.getElementById(id);
     if (wrap) wrap.dataset.alltext = allText;
     populateMultiselect(id, vals);
