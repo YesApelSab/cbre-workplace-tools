@@ -1748,8 +1748,8 @@ function renderExecSummary() {
   };
 
   // ── Space, Design & Function ───────────────────────────────────────────
-  const supplyItems = C.SSUPPLY.map((col,i) => { const d=supplyDist(rows,col); return {label:C.SSUPPLY_L[i], tooLittlePct:d.t?pct(d.l,d.t):0, rightPct:d.t?pct(d.r,d.t):0}; });
-  const worstSupply = [...supplyItems].sort((a,b)=>b.tooLittlePct-a.tooLittlePct)[0];
+  const supplyItems = C.SSUPPLY.map((col,i) => { const d=supplyDist(rows,col); return {label:C.SSUPPLY_L[i], nonePct:d.t?pct(d.n,d.t):0, tooLittlePct:d.t?pct(d.l,d.t):0, insuffPct:d.t?pct(d.n+d.l,d.t):0, rightPct:d.t?pct(d.r,d.t):0}; });
+  const worstSupply = [...supplyItems].sort((a,b)=>b.insuffPct-a.insuffPct)[0];
   const bestSupply  = [...supplyItems].sort((a,b)=>b.rightPct-a.rightPct)[0];
   const funcItems   = C.SFUNC.map((col,i)=>({label:C.SFUNC_L[i],...likertDist(rows,col)})).filter(d=>d.avg!==null);
   const lowestFunc  = funcItems.length ? [...funcItems].sort((a,b)=>(a.avg||0)-(b.avg||0))[0] : null;
@@ -1757,10 +1757,11 @@ function renderExecSummary() {
   const vibeQ = avg(numVals(rows,'VIBE.QUIET'))||0;
   const vibeD = avg(numVals(rows,'VIBE.DYNAMIC'))||0;
   const spaceIns = [];
-  if (worstSupply && worstSupply.tooLittlePct > 0) {
-    spaceIns.push(worstSupply.tooLittlePct >= 40
-      ? { icon:'⚠️', text:`<strong>${worstSupply.tooLittlePct}% of respondents say ${worstSupply.label.toLowerCase()} are insufficient</strong> — the most cited supply gap and highest-priority space addition to consider.` }
-      : { icon:'📦', text:`<strong>${worstSupply.label}</strong> has the largest perceived shortage, with ${worstSupply.tooLittlePct}% saying there is too little. ${bestSupply.rightPct > 60 ? `By contrast, ${bestSupply.label.toLowerCase()} are widely seen as well-stocked (${bestSupply.rightPct}% right amount).` : ''}` });
+  if (worstSupply && worstSupply.insuffPct > 0) {
+    const nonePart = worstSupply.nonePct > 0 ? ` (${worstSupply.nonePct}% have none, ${worstSupply.tooLittlePct}% say too little)` : ` (${worstSupply.tooLittlePct}% say too little)`;
+    spaceIns.push(worstSupply.insuffPct >= 40
+      ? { icon:'⚠️', text:`<strong>${worstSupply.insuffPct}% of respondents say ${worstSupply.label.toLowerCase()} are insufficient</strong>${nonePart} — the most cited supply gap and highest-priority space addition to consider.` }
+      : { icon:'📦', text:`<strong>${worstSupply.label}</strong> has the largest perceived shortage, with ${worstSupply.insuffPct}% reporting insufficient supply${nonePart}. ${bestSupply.rightPct > 60 ? `By contrast, ${bestSupply.label.toLowerCase()} are widely seen as well-stocked (${bestSupply.rightPct}% right amount).` : ''}` });
   }
   if (lowestFunc) spaceIns.push({ icon:'🔧', text:`<strong>${lowestFunc.label}</strong> is the lowest-rated functionality item (avg ${lowestFunc.avg?.toFixed(1)}/4). <strong>${highestFunc?.label}</strong> scores highest at ${highestFunc?.avg?.toFixed(1)}/4.` });
   if (vibeD > 0 || vibeQ > 0) { const lean = vibeQ > vibeD ? 'quieter, library-like' : 'dynamic, energetic'; spaceIns.push({ icon:'🎧', text:`Employees prefer to spend <strong>${Math.round(vibeQ>vibeD?vibeQ:vibeD)}% of their time in a ${lean} environment</strong>. Design should prioritize ${vibeQ>vibeD?'acoustic comfort and focus-friendly zones':'collaborative, activating spaces'}.` }); }
@@ -1886,9 +1887,9 @@ function renderSpace() {
   let html = '';
 
   // ── Key Takeaways ─────────────────────────────────────────────────────
-  // Supply: find space type with highest "too little" %
-  const supplyItems = C.SSUPPLY.map((col,i) => { const d = supplyDist(rows,col); return {label:C.SSUPPLY_L[i], tooLittlePct: d.t ? pct(d.l,d.t) : 0, rightPct: d.t ? pct(d.r,d.t) : 0}; });
-  const worstSupply = [...supplyItems].sort((a,b) => b.tooLittlePct - a.tooLittlePct)[0];
+  // Supply: find space type with highest combined "none + too little" %
+  const supplyItems = C.SSUPPLY.map((col,i) => { const d = supplyDist(rows,col); return {label:C.SSUPPLY_L[i], nonePct: d.t ? pct(d.n,d.t) : 0, tooLittlePct: d.t ? pct(d.l,d.t) : 0, insuffPct: d.t ? pct(d.n+d.l,d.t) : 0, rightPct: d.t ? pct(d.r,d.t) : 0}; });
+  const worstSupply = [...supplyItems].sort((a,b) => b.insuffPct - a.insuffPct)[0];
   const bestSupply  = [...supplyItems].sort((a,b) => b.rightPct - a.rightPct)[0];
 
   // Functionality: lowest and highest rated
@@ -1902,11 +1903,12 @@ function renderSpace() {
 
   const spaceInsights = [];
 
-  if (worstSupply && worstSupply.tooLittlePct > 0) {
-    if (worstSupply.tooLittlePct >= 40) {
-      spaceInsights.push({ icon:'⚠️', text:`<strong>${worstSupply.tooLittlePct}% of respondents say ${worstSupply.label.toLowerCase()} are insufficient</strong> — the most cited supply gap and the highest-priority space addition to consider.` });
+  if (worstSupply && worstSupply.insuffPct > 0) {
+    const nonePart = worstSupply.nonePct > 0 ? ` (${worstSupply.nonePct}% have none, ${worstSupply.tooLittlePct}% say too little)` : ` (${worstSupply.tooLittlePct}% say too little)`;
+    if (worstSupply.insuffPct >= 40) {
+      spaceInsights.push({ icon:'⚠️', text:`<strong>${worstSupply.insuffPct}% of respondents say ${worstSupply.label.toLowerCase()} are insufficient</strong>${nonePart} — the most cited supply gap and the highest-priority space addition to consider.` });
     } else {
-      spaceInsights.push({ icon:'📦', text:`<strong>${worstSupply.label}</strong> has the largest perceived shortage, with ${worstSupply.tooLittlePct}% of respondents saying there is too little. ${bestSupply.rightPct > 60 ? `By contrast, ${bestSupply.label.toLowerCase()} are widely seen as well-stocked (${bestSupply.rightPct}% right amount).` : ''}` });
+      spaceInsights.push({ icon:'📦', text:`<strong>${worstSupply.label}</strong> has the largest perceived shortage, with ${worstSupply.insuffPct}% of respondents reporting insufficient supply${nonePart}. ${bestSupply.rightPct > 60 ? `By contrast, ${bestSupply.label.toLowerCase()} are widely seen as well-stocked (${bestSupply.rightPct}% right amount).` : ''}` });
     }
   }
 
@@ -1932,7 +1934,8 @@ function renderSpace() {
   }
 
   // Supply
-  const supplyChartItems = C.SSUPPLY.map((col,i) => ({label:C.SSUPPLY_L[i],...supplyDist(rows,col)}));
+  const supplyChartItems = C.SSUPPLY.map((col,i) => ({label:C.SSUPPLY_L[i],...supplyDist(rows,col)}))
+    .sort((a,b) => (b.t ? b.r/b.t : 0) - (a.t ? a.r/a.t : 0));
   window._lastSupplyData = supplyChartItems;
   html += `<div class="chart-card">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem">
@@ -3796,7 +3799,7 @@ function exportPDFReport() {
 
   // Space
   const funcItems=C.SFUNC.map((col,i)=>({label:C.SFUNC_L[i],...likertDist(rows,col)})).filter(d=>d.avg!==null).sort((a,b)=>(a.avg||0)-(b.avg||0));
-  const supplyItems=C.SSUPPLY.map((col,i)=>{const d=supplyDist(rows,col);return{label:C.SSUPPLY_L[i],tooLittlePct:d.t?pct(d.l,d.t):0};}).sort((a,b)=>b.tooLittlePct-a.tooLittlePct);
+  const supplyItems=C.SSUPPLY.map((col,i)=>{const d=supplyDist(rows,col);return{label:C.SSUPPLY_L[i],nonePct:d.t?pct(d.n,d.t):0,tooLittlePct:d.t?pct(d.l,d.t):0,insuffPct:d.t?pct(d.n+d.l,d.t):0};}).sort((a,b)=>b.insuffPct-a.insuffPct);
 
   // REL
   const relItems=C.REL.map((col,i)=>({label:C.REL_L[i],...likertDist(rows,col)})).filter(d=>d.avg!==null).sort((a,b)=>(b.avg||0)-(a.avg||0));
