@@ -854,7 +854,7 @@ const C = {
   Q20:['NOISESRC.SOCIAL','NOISESRC.CALLS','NOISESRC.DEVICE','NOISESRC.OUTSIDE','NOISESRC.OTHER','NOISESRC.NONE'],
   Q20_L:['Socializing nearby','Calls/meetings nearby','Devices/equipment/HVAC','Outside noise','Other','N/A — no noise distractions'],
   LUNFREQ:'LUNFREQ', LUNLOCAL:'LUNLOCAL', TECHNEED:'TECHNEED',
-  Q26:'SPECREQ', Q31:'MGRFREQ', Q32:'COLLABVBM.A1', Q34:'HALLREC', Q51:'FINALVBM.A1',
+  Q26:'SPECREQ.A1', Q31:'MGRFREQ', Q32:'COLLABVBM.A1', Q34:'HALLREC', Q51:'FINALVBM.A1',
 };
 
 const LIKERT_MAP = {
@@ -2563,8 +2563,8 @@ function renderWorkStyles() {
     const dq2 = Math.round(avg(numVals(rArr, 'VIBE.QUIET')) || 0);
     const tR = rArr.filter(r => { const v = gv(r,'TECHNEED'); return v && v.trim(); });
     const np2 = tR.length ? Math.round(tR.filter(r => gv(r,'TECHNEED').trim().toLowerCase().includes('specific')).length / tR.length * 100) : 0;
-    const lR = rArr.filter(r => { const t=gv(r,'TLOCAL'),m=gv(r,'MLOCAL'); return t&&t.trim()&&m&&m.trim(); });
-    const lmLoc = lR.filter(r => gv(r,'TLOCAL').trim().toLowerCase()==='yes' && gv(r,'MLOCAL').trim().toLowerCase()==='yes');
+    const lR = rArr.filter(r => { const t=gv(r,C.TLOCAL),m=gv(r,C.MLOCAL); return t&&t.trim()&&m&&m.trim(); });
+    const lmLoc = lR.filter(r => gv(r,C.TLOCAL).trim().toLowerCase()==='yes' && gv(r,C.MLOCAL).trim().toLowerCase()==='yes');
     const lm2 = lR.length ? Math.round((1 - lmLoc.length / lR.length) * 100) : 50;
     return { ic:ic2, su:su2, dq:dq2, np:np2, lm:lm2 };
   }
@@ -3499,8 +3499,8 @@ function exportPDFReport() {
   const dq=Math.round(avg(numVals(rows,'VIBE.QUIET'))||0);
   const npR=rows.filter(r=>{const v=gv(r,'TECHNEED');return v&&v.trim();});
   const np=npR.length?Math.round(npR.filter(r=>gv(r,'TECHNEED').trim().toLowerCase().includes('specific')).length/npR.length*100):0;
-  const lmR=rows.filter(r=>{const t=gv(r,'TLOCAL'),m=gv(r,'MLOCAL');return t&&t.trim()&&m&&m.trim();});
-  const lmLoc=lmR.filter(r=>gv(r,'TLOCAL').trim().toLowerCase()==='yes'&&gv(r,'MLOCAL').trim().toLowerCase()==='yes');
+  const lmR=rows.filter(r=>{const t=gv(r,C.TLOCAL),m=gv(r,C.MLOCAL);return t&&t.trim()&&m&&m.trim();});
+  const lmLoc=lmR.filter(r=>gv(r,C.TLOCAL).trim().toLowerCase()==='yes'&&gv(r,C.MLOCAL).trim().toLowerCase()==='yes');
   const lm=lmR.length?Math.round((1-lmLoc.length/lmR.length)*100):50;
   const scalesData=[
     {code:'IC',pct:ic,low:'Individual',high:'Collaborative',desc:'Time spent collaborating vs. working independently'},
