@@ -900,9 +900,11 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
 </div><!-- /page -->
 
 <script>
-// Capture pristine HTML source at load time — used by downloadClientPackage so
-// it never depends on a server fetch (which can return a stale CDN-cached copy).
-const __PAGE_SOURCE__ = document.documentElement.outerHTML;
+// Capture pristine HTML source after DOM is fully parsed.
+let __PAGE_SOURCE__ = '';
+document.addEventListener('DOMContentLoaded', () => {
+  __PAGE_SOURCE__ = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+});
 
 // ─── COLUMN DEFINITIONS ───────────────────────────────────────────────────────
 const C = {
@@ -4401,12 +4403,9 @@ function downloadClientPackage() {
   // __PAGE_SOURCE__ is set once at script start before any DOM changes.
   (function() {
     try {
-      let html = '<!DOCTYPE html>\n' + __PAGE_SOURCE__;
+      let html = __PAGE_SOURCE__;
       html = html.replace(/<head>/i, () => '<head>' + preloadScript);
-      const bodyClose = html.lastIndexOf('</body>');
-      if (bodyClose !== -1) {
-        html = html.slice(0, bodyClose) + autoloadScript + html.slice(bodyClose);
-      }
+      html = html + '\n' + autoloadScript;
       const slug = (clientName || 'client').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
       const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
       const url  = URL.createObjectURL(blob);
