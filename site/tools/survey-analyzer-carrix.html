@@ -947,6 +947,7 @@ const L5_COLORS = ['#8B1A1A','#D2785A','#17E88F','#003F2D'];
 let allRows = [];
 let colIdx = {};
 let filteredRows = [];
+let extraDemoColumns = [];
 
 // ─── PARSE HELPERS ────────────────────────────────────────────────────────────
 function parseLikert(val) {
@@ -1278,6 +1279,22 @@ function buildFilters() {
       o.value = v; o.textContent = v; sel.appendChild(o);
     });
   });
+
+  // Remove any extra filter groups from a previous file load
+  document.querySelectorAll('.extra-filter-group').forEach(el => el.remove());
+  const filtersRow = document.querySelector('.filters-row');
+  const resetBtn = filtersRow.querySelector('.reset-btn');
+  extraDemoColumns.forEach(({ code, label, vals }) => {
+    const fg = document.createElement('div');
+    fg.className = 'filter-group extra-filter-group';
+    const shortLabel = label.length > 32 ? label.slice(0, 29) + '…' : label;
+    fg.innerHTML = `<span class="filter-label" title="${label}">${shortLabel}</span>
+      <select class="filter-select" id="fExtra_${code}" onchange="applyFilters()">
+        <option value="">All</option>
+        ${vals.map(v => `<option value="${v}">${v}</option>`).join('')}
+      </select>`;
+    filtersRow.insertBefore(fg, resetBtn);
+  });
 }
 
 function updateClientName() {
@@ -1295,12 +1312,17 @@ function applyFilters() {
   const gen = document.getElementById('fGen').value;
   const tenure = document.getElementById('fTenure').value;
   const freq = document.getElementById('fFreq').value;
+  const extraFilters = extraDemoColumns.map(({ code }) => {
+    const el = document.getElementById(`fExtra_${code}`);
+    return { code, val: el ? el.value : '' };
+  });
   filteredRows = allRows.filter(r =>
     (!dept || gv(r,C.DEPT) === dept) &&
     (!role || gv(r,C.ROLE) === role) &&
     (!gen || gv(r,C.GEN) === gen) &&
     (!tenure || gv(r,C.TENURE) === tenure) &&
-    (!freq || gv(r,C.FREQOFF) === freq)
+    (!freq || gv(r,C.FREQOFF) === freq) &&
+    extraFilters.every(({ code, val }) => !val || gv(r, code) === val)
   );
   const nBadge = document.getElementById('nBadge');
   if (nBadge) {
@@ -1317,6 +1339,10 @@ function applyFilters() {
 
 function resetFilters() {
   ['fDept','fRole','fGen','fTenure','fFreq'].forEach(id => document.getElementById(id).value = '');
+  extraDemoColumns.forEach(({ code }) => {
+    const el = document.getElementById(`fExtra_${code}`);
+    if (el) el.value = '';
+  });
   applyFilters();
 }
 
@@ -2451,8 +2477,8 @@ function renderWorkStyles() {
     const dq2 = Math.round(avg(numVals(rArr, 'VIBE.QUIET')) || 0);
     const tR = rArr.filter(r => { const v = gv(r,'TECHNEED'); return v && v.trim(); });
     const np2 = tR.length ? Math.round(tR.filter(r => gv(r,'TECHNEED').trim().toLowerCase().includes('specific')).length / tR.length * 100) : 0;
-    const lR = rArr.filter(r => { const t=gv(r,'TLOCAL'),m=gv(r,'MLOCAL'); return t&&t.trim()&&m&&m.trim(); });
-    const lmLoc = lR.filter(r => gv(r,'TLOCAL').trim().toLowerCase()==='yes' && gv(r,'MLOCAL').trim().toLowerCase()==='yes');
+    const lR = rArr.filter(r => { const t=gv(r,C.TLOCAL),m=gv(r,C.MLOCAL); return t&&t.trim()&&m&&m.trim(); });
+    const lmLoc = lR.filter(r => gv(r,C.TLOCAL).trim().toLowerCase()==='yes' && gv(r,C.MLOCAL).trim().toLowerCase()==='yes');
     const lm2 = lR.length ? Math.round((1 - lmLoc.length / lR.length) * 100) : 50;
     return { ic:ic2, su:su2, dq:dq2, np:np2, lm:lm2 };
   }
@@ -3289,6 +3315,10 @@ function exportPDFReport() {
     if (document.getElementById('fGen').value)    parts.push('Gen: '  + document.getElementById('fGen').value);
     if (document.getElementById('fTenure').value) parts.push('Tenure: '+ document.getElementById('fTenure').value);
     if (document.getElementById('fFreq').value)   parts.push('Freq: ' + document.getElementById('fFreq').value);
+    extraDemoColumns.forEach(({ code, label }) => {
+      const el = document.getElementById(`fExtra_${code}`);
+      if (el && el.value) parts.push(label.split(' ').slice(0,2).join(' ') + ': ' + el.value);
+    });
     return parts.length ? parts.join(' · ') : 'All respondents';
   })();
 
@@ -3331,8 +3361,8 @@ function exportPDFReport() {
   const dq=Math.round(avg(numVals(rows,'VIBE.QUIET'))||0);
   const npR=rows.filter(r=>{const v=gv(r,'TECHNEED');return v&&v.trim();});
   const np=npR.length?Math.round(npR.filter(r=>gv(r,'TECHNEED').trim().toLowerCase().includes('specific')).length/npR.length*100):0;
-  const lmR=rows.filter(r=>{const t=gv(r,'TLOCAL'),m=gv(r,'MLOCAL');return t&&t.trim()&&m&&m.trim();});
-  const lmLoc=lmR.filter(r=>gv(r,'TLOCAL').trim().toLowerCase()==='yes'&&gv(r,'MLOCAL').trim().toLowerCase()==='yes');
+  const lmR=rows.filter(r=>{const t=gv(r,C.TLOCAL),m=gv(r,C.MLOCAL);return t&&t.trim()&&m&&m.trim();});
+  const lmLoc=lmR.filter(r=>gv(r,C.TLOCAL).trim().toLowerCase()==='yes'&&gv(r,C.MLOCAL).trim().toLowerCase()==='yes');
   const lm=lmR.length?Math.round((1-lmLoc.length/lmR.length)*100):50;
   const scalesData=[
     {code:'IC',pct:ic,low:'Individual',high:'Collaborative',desc:'Time spent collaborating vs. working independently'},
