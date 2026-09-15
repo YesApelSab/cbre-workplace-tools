@@ -1257,11 +1257,19 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     )) { C.ROLE = code.trim(); roleFound = true; }
   });
 
-  // Detect commute-related columns so C.Q15 / C.COMMUTE stay correct when Q-numbers shift
-  let commuteTimeFound = false, commuteModeFound = false;
+  // Detect workspace/commute columns by question text so codes stay correct when Q-numbers shift
+  let assignedWsFound = false, wsTypeFound = false, commuteTimeFound = false, commuteModeFound = false;
   codes.forEach((code, i) => {
     if (!code || !code.trim()) return;
     const qt = (qTexts[i] || '').toLowerCase();
+    if (!assignedWsFound && (
+      (qt.includes('assigned workspace') && (qt.includes('do you have') || qt.includes('have an'))) ||
+      qt.includes('assigned a workspace')
+    )) { C.Q11 = code.trim(); assignedWsFound = true; }
+    if (!wsTypeFound && (
+      (qt.includes('primary work setting') && qt.includes('office')) ||
+      (qt.includes('work setting') && (qt.includes('describes') || qt.includes('best describes')))
+    )) { C.Q12 = code.trim(); wsTypeFound = true; }
     if (!commuteTimeFound && (
       qt.includes('commute time') || qt.includes('one-way commute') ||
       (qt.includes('how long') && qt.includes('commute')) || qt.includes('travel time to')
@@ -1269,6 +1277,7 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     if (!commuteModeFound && (
       qt.includes('commute mode') || qt.includes('mode of transport') ||
       qt.includes('how do you commute') || qt.includes('how do you typically commute') ||
+      (qt.includes('primarily') && qt.includes('get to') && qt.includes('office')) ||
       (qt.includes('primary') && qt.includes('transportation')) ||
       qt.includes('travel to the office') || qt.includes('travel to work')
     )) { C.Q15 = code.trim(); commuteModeFound = true; }
@@ -4519,7 +4528,7 @@ function downloadClientPackage() {
 
   // Capture auto-detected column code overrides so the client package uses the same mappings
   const cOverrides = {};
-  ['DEPT','ROLE','GEN','TENURE','FREQOFF','COMMUTE','Q15'].forEach(k => {
+  ['DEPT','ROLE','GEN','TENURE','FREQOFF','Q11','Q12','COMMUTE','Q15'].forEach(k => {
     if (typeof C[k] === 'string') cOverrides[k] = C[k];
   });
 
