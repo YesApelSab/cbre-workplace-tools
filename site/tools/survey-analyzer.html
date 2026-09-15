@@ -679,21 +679,29 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
     <div class="export-instructions">
       <div class="export-instructions-header">
         <span class="export-instructions-icon">⚙️</span>
-        <span class="export-instructions-title">Key Survey Export Instruction</span>
+        <span class="export-instructions-title">Qualtrics Export Instructions</span>
       </div>
-      <p class="export-instructions-lead">Before exporting your data from Key Survey, one setting is critical:</p>
+      <p class="export-instructions-lead">Use these exact settings when exporting from Qualtrics — wrong settings cause filter errors:</p>
       <div class="export-steps">
         <div class="export-step">
           <div class="export-step-num">1</div>
-          <div class="export-step-body">In Key Survey, go to your client survey → <strong>Reports → Standard Reporting → Export to CSV</strong>.</div>
+          <div class="export-step-body">In Qualtrics, open the survey → <strong>Data &amp; Analysis → Export &amp; Import → Export Data</strong>. Select <strong>CSV</strong> as the format.</div>
         </div>
         <div class="export-step">
           <div class="export-step-num">2</div>
-          <div class="export-step-body">On the export page under <em>Include identifiers</em>, select <strong>Question References only</strong> — <span class="export-not">nothing else</span>. This ensures column headers appear as codes like <code>POSVBM.A1</code> rather than generic IDs the tool cannot read.</div>
+          <div class="export-step-body">Under <em>Download options</em>, choose <strong>Export labels only</strong> (not values, not both).</div>
         </div>
         <div class="export-step">
           <div class="export-step-num">3</div>
-          <div class="export-step-body">Leave all other defaults in place and download the file. The first three rows (question codes, labels, sub-labels) must remain intact — do not delete them before uploading.</div>
+          <div class="export-step-body">Under <em>Include identifiers</em>, check <strong>Question References</strong> only — leave all others (Question identifiers, Answer identifiers, Column names) <span class="export-not">unchecked</span>.</div>
+        </div>
+        <div class="export-step">
+          <div class="export-step-num">4</div>
+          <div class="export-step-body">Under <em>Include labels</em>, check both <strong>Question text</strong> and <strong>Answer text</strong>. Set delimiter to <strong>Comma</strong>. Leave everything else at its default.</div>
+        </div>
+        <div class="export-step">
+          <div class="export-step-num">5</div>
+          <div class="export-step-body">Click <strong>Export to CSV</strong>. Do <span class="export-not">not</span> open or edit the file before uploading — the three header rows (codes, question text, metadata) must stay intact.</div>
         </div>
       </div>
     </div>
