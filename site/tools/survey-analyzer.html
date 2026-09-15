@@ -743,6 +743,23 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
 
   </div><!-- /uploadScreen -->
 
+  <!-- COLUMN MAPPING CONFIRMATION -->
+  <div id="columnMappingScreen" style="display:none;min-height:100vh;align-items:center;justify-content:center;padding:2rem">
+    <div style="width:100%;max-width:640px">
+      <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:rgba(23,232,143,0.6);margin-bottom:0.5rem">Column Mapping</div>
+      <h2 style="font-size:1.5rem;font-weight:700;color:var(--text);margin:0 0 0.35rem">Confirm filter columns</h2>
+      <p style="font-size:0.85rem;color:var(--text-muted);margin:0 0 1.75rem">We auto-detected these columns from your CSV. Verify each one is correct before loading the dashboard — this takes 10 seconds and prevents filter errors.</p>
+
+      <div id="cmapRows" style="display:flex;flex-direction:column;gap:0.75rem;margin-bottom:1.75rem"></div>
+
+      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+        <button onclick="confirmColumnMapping()" style="background:#17E88F;color:#001A14;border:none;border-radius:8px;padding:0.75rem 2rem;font-size:0.95rem;font-weight:700;cursor:pointer">Load Dashboard →</button>
+        <button onclick="cancelColumnMapping()" style="background:none;border:1px solid rgba(242,244,243,0.15);border-radius:8px;padding:0.75rem 1.25rem;font-size:0.95rem;color:var(--text-muted);cursor:pointer">← Back</button>
+        <span id="cmapSavedNote" style="font-size:0.75rem;color:rgba(23,232,143,0.6);display:none">✓ Using saved mapping</span>
+      </div>
+    </div>
+  </div>
+
   <!-- MAIN APP -->
   <div class="app-layout" id="appLayout">
 
@@ -1367,8 +1384,87 @@ function handleFile(file) {
   if (!file.name.endsWith('.csv')) { showErr('Please upload a .csv file.'); return; }
   document.getElementById('uploadError').style.display = 'none';
   const reader = new FileReader();
-  reader.onload = e => { if (parseCSV(e.target.result)) initApp(); };
+  reader.onload = e => { if (parseCSV(e.target.result)) showColumnMappingScreen(file.name); };
   reader.readAsText(file);
+}
+
+// ─── COLUMN MAPPING SCREEN ────────────────────────────────────────────────────
+
+const CMAP_SLOTS = [
+  { key: 'DEPT',    label: 'Department',      hint: 'business unit / division / department' },
+  { key: 'ROLE',    label: 'Role / Level',    hint: 'individual contributor / manager / leader' },
+  { key: 'GEN',     label: 'Generation',      hint: 'born YYYY or generational cohort' },
+  { key: 'TENURE',  label: 'Tenure',          hint: 'years at company' },
+  { key: 'FREQOFF', label: 'Office Frequency',hint: 'how often in office per week' },
+];
+
+function cmapStorageKey(filename) {
+  // Key based on sorted column codes — stable across file renames
+  const codes = Object.keys(colIdx).sort().join('|');
+  let h = 0;
+  for (let i = 0; i < codes.length; i++) { h = (Math.imul(31, h) + codes.charCodeAt(i)) | 0; }
+  return 'colmap_' + Math.abs(h).toString(36);
+}
+
+function showColumnMappingScreen(filename) {
+  document.getElementById('uploadScreen').style.display = 'none';
+
+  // All CSV columns as dropdown options
+  const allCols = Object.keys(colIdx).sort();
+  const optionsHtml = `<option value="">(not mapped — hide this filter)</option>` +
+    allCols.map(c => {
+      const qt = (qTextsMap[c] || '').slice(0, 70);
+      const label = qt ? `${c} — ${qt}` : c;
+      return `<option value="${c}">${label}</option>`;
+    }).join('');
+
+  // Load saved mapping if it exists
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(cmapStorageKey(filename)) || 'null'); } catch(e) {}
+  if (saved) document.getElementById('cmapSavedNote').style.display = '';
+  else document.getElementById('cmapSavedNote').style.display = 'none';
+
+  const rowsEl = document.getElementById('cmapRows');
+  rowsEl.innerHTML = CMAP_SLOTS.map(({ key, label, hint }) => {
+    // Priority: saved mapping > auto-detected C value (if it exists in CSV) > blank
+    const detected = C[key] && colIdx[C[key]] !== undefined ? C[key] : '';
+    const selected = saved && saved[key] !== undefined ? (saved[key] || '') : detected;
+    const opts = optionsHtml.replace(`value="${selected}"`, `value="${selected}" selected`);
+    const badge = detected
+      ? `<span style="font-size:0.7rem;background:rgba(23,232,143,0.12);color:rgba(23,232,143,0.7);border-radius:4px;padding:0.1rem 0.4rem;margin-left:0.4rem">auto-detected</span>`
+      : `<span style="font-size:0.7rem;background:rgba(210,120,90,0.12);color:#D2785A;border-radius:4px;padding:0.1rem 0.4rem;margin-left:0.4rem">not found</span>`;
+    return `<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(242,244,243,0.1);border-radius:8px;padding:0.75rem 1rem">
+      <div style="display:flex;align-items:center;margin-bottom:0.4rem">
+        <span style="font-size:0.8rem;font-weight:700;color:var(--text)">${label}</span>${badge}
+        <span style="font-size:0.72rem;color:var(--text-muted);margin-left:auto">${hint}</span>
+      </div>
+      <select id="cmap_${key}" style="width:100%;background:rgba(0,0,0,0.3);border:1px solid rgba(242,244,243,0.15);border-radius:6px;padding:0.45rem 0.6rem;font-size:0.82rem;color:var(--text);cursor:pointer">${opts}</select>
+    </div>`;
+  }).join('');
+
+  const screen = document.getElementById('columnMappingScreen');
+  screen.style.display = 'flex';
+}
+
+function confirmColumnMapping() {
+  // Apply chosen mappings to C
+  const mapping = {};
+  CMAP_SLOTS.forEach(({ key }) => {
+    const val = (document.getElementById('cmap_' + key)?.value || '').trim();
+    mapping[key] = val || null;
+    if (val) C[key] = val;
+  });
+
+  // Persist so next load of same survey format auto-fills
+  try { localStorage.setItem(cmapStorageKey(''), JSON.stringify(mapping)); } catch(e) {}
+
+  document.getElementById('columnMappingScreen').style.display = 'none';
+  initApp();
+}
+
+function cancelColumnMapping() {
+  document.getElementById('columnMappingScreen').style.display = 'none';
+  document.getElementById('uploadScreen').style.display = '';
 }
 
 function checkColumns() {
