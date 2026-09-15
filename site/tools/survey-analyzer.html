@@ -1414,7 +1414,15 @@ function showColumnMappingScreen(filename) {
   const optionsHtml = `<option value="">(not mapped — hide this filter)</option>` +
     allCols.map(c => {
       const qt = (qTextsMap[c] || '').slice(0, 70);
-      const label = qt ? `${c} — ${qt}` : c;
+      let label;
+      if (qt) {
+        label = `${c} — ${qt}`;
+      } else {
+        // No question text row (single-header CSV) — show sample data values instead
+        const idx = colIdx[c];
+        const samples = [...new Set(allRows.slice(0, 30).map(r => (r[idx] || '').trim()).filter(Boolean))].slice(0, 3);
+        label = samples.length ? `${c} — e.g. ${samples.join(' · ')}` : c;
+      }
       return `<option value="${c}">${label}</option>`;
     }).join('');
 
