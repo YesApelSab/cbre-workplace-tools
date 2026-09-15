@@ -1205,11 +1205,11 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
         !qt.includes('most frequent') && !qt.includes('work with')) {
       C.DEPT = code.trim(); deptFound = true;
     }
-    // DEPT value-based fallback (single-header CSVs have no question text).
-    // Org unit columns contain division/department/office/etc words; location columns end in ", XX" (city, state).
-    if (!deptFound && vals.length >= 2) {
+    // DEPT value-based fallback — only for single-header CSVs where question text is unavailable.
+    // Org unit columns contain division/department/bureau/section words; location columns end in ", XX" (city, state).
+    if (!deptFound && isSingleHeader && vals.length >= 2) {
       const looksLikeLocation = vals.some(v => /,\s*[a-z]{2}$/.test(v));
-      const looksLikeOrgUnit  = vals.some(v => /\b(division|department|office|group|bureau|section|branch)\b/.test(v));
+      const looksLikeOrgUnit  = vals.some(v => /\b(division|department|bureau|section)\b/.test(v));
       if (looksLikeOrgUnit && !looksLikeLocation) { C.DEPT = code.trim(); deptFound = true; }
     }
 
