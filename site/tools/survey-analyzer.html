@@ -1460,7 +1460,7 @@ function confirmColumnMapping() {
   CMAP_SLOTS.forEach(({ key }) => {
     const val = (document.getElementById('cmap_' + key)?.value || '').trim();
     mapping[key] = val || null;
-    if (val) C[key] = val;
+    if (val) C[key] = val; else C[key] = null;
   });
 
   // Persist so next load of same survey format auto-fills
@@ -1604,6 +1604,13 @@ function buildFilters() {
     [C.FREQOFF]:['Every day (5 days per week)','4 days per week','2-3 days per week','1 day per week','Less than one day per week','Never (fully remote)'],
   };
   [['fDept',C.DEPT,'All Departments'],['fRole',C.ROLE,'All Roles'],['fGen',C.GEN,'All Generations'],['fTenure',C.TENURE,'All Tenure'],['fFreq',C.FREQOFF,'All Frequencies']].forEach(([id,col,allText]) => {
+    const wrap = document.getElementById(id);
+    const filterGroup = wrap ? wrap.closest('.filter-group') : null;
+    if (!col) {
+      if (filterGroup) filterGroup.style.display = 'none';
+      return;
+    }
+    if (filterGroup) filterGroup.style.display = '';
     const order = FILTER_ORDERS[col];
     const vals = [...new Set(allRows.map(r => gv(r, col)).filter(v => v))];
     if (order) {
@@ -1614,7 +1621,6 @@ function buildFilters() {
     }
     // Pin "Prefer not to say / answer" to bottom regardless of column
     vals.sort((a,b) => (PNTS.test(a)?1:0)-(PNTS.test(b)?1:0));
-    const wrap = document.getElementById(id);
     if (wrap) wrap.dataset.alltext = allText;
     populateMultiselect(id, vals);
   });
