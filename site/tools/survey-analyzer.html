@@ -1183,10 +1183,11 @@ function qLabel(col, fallback) {
 
 // Detect DEPT/ROLE/GEN/TENURE columns by question text + data values so the
 // tool works correctly when clients add, remove, or reorder demographic questions.
-function autoDetectDemoColumns(rows) {
-  const codes    = rows[0] || [];
-  const qTexts   = rows[1] || [];
-  const dataRows = rows.slice(3).filter(r => r.some(c => c && c.trim()));
+function autoDetectDemoColumns(rows, isSingleHeader) {
+  const codes     = rows[0] || [];
+  const qTexts    = isSingleHeader ? [] : (rows[1] || []);
+  const dataStart = isSingleHeader ? 1 : 3;
+  const dataRows  = rows.slice(dataStart).filter(r => r.some(c => c && c.trim()));
   let deptFound = false, genFound = false, tenureFound = false, roleFound = false;
 
   codes.forEach((code, i) => {
@@ -1204,6 +1205,14 @@ function autoDetectDemoColumns(rows) {
         !qt.includes('most frequent') && !qt.includes('work with')) {
       C.DEPT = code.trim(); deptFound = true;
     }
+    // DEPT value-based fallback (single-header CSVs have no question text).
+    // Org unit columns contain division/department/office/etc words; location columns end in ", XX" (city, state).
+    if (!deptFound && vals.length >= 2) {
+      const looksLikeLocation = vals.some(v => /,\s*[a-z]{2}$/.test(v));
+      const looksLikeOrgUnit  = vals.some(v => /\b(division|department|office|group|bureau|section|branch)\b/.test(v));
+      if (looksLikeOrgUnit && !looksLikeLocation) { C.DEPT = code.trim(); deptFound = true; }
+    }
+
     // GEN: question mentions "generation", or values follow "Born YYYY" pattern
     if (!genFound && (
       qt.includes('generation') ||
@@ -1218,7 +1227,8 @@ function autoDetectDemoColumns(rows) {
 
     // ROLE: values contain leadership/management level language
     if (!roleFound && vals.some(v =>
-      v.includes('leader of') || v.includes('individual contributor') || v.includes('leader of leaders')
+      v.includes('leader of') || v.includes('individual contributor') || v.includes('leader of leaders') ||
+      v.includes('manager of') || v === 'manager'
     )) { C.ROLE = code.trim(); roleFound = true; }
   });
 
@@ -1313,18 +1323,28 @@ function autoDetectDemoColumns(rows) {
 function parseCSV(text) {
   const res = Papa.parse(text, { header: false, skipEmptyLines: false });
   const rows = res.data;
-  if (rows.length < 5) { showErr('CSV must have at least 5 rows (3 header + data).'); return false; }
+  if (rows.length < 2) { showErr('CSV must have at least 2 rows (header + data).'); return false; }
   colIdx = {};
   qTextsMap = {};
-  const qRow = rows[1] || [];
+
+  // Detect header format.
+  // Qualtrics 3-header: row0=codes, row1=question texts, row2=metadata, row3+=data.
+  // Single-header: row0=codes, row1+=data.
+  // If row1[0] is a numeric respondent ID or a timestamp, it's data (single-header).
+  const row1First = ((rows[1] || [])[0] || '').trim();
+  const isSingleHeader = /^\d+$/.test(row1First) || /^\d{4}-\d{2}-\d{2}/.test(row1First);
+
+  const qRow      = isSingleHeader ? [] : (rows[1] || []);
+  const dataStart = isSingleHeader ? 1  : 3;
+
   rows[0].forEach((code, i) => {
     if (code && code.trim()) {
       colIdx[code.trim()] = i;
       qTextsMap[code.trim()] = (qRow[i] || '').trim();
     }
   });
-  allRows = rows.slice(3).filter(r => r.some(c => c && c.trim() !== ''));
-  autoDetectDemoColumns(rows);
+  allRows = rows.slice(dataStart).filter(r => r.some(c => c && c.trim() !== ''));
+  autoDetectDemoColumns(rows, isSingleHeader);
   return true;
 }
 
