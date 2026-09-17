@@ -25,6 +25,8 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+select option { background: #0d1f1a; color: #F2F4F3; }
+.bar-fill { height: 100%; border-radius: 4px; }
 body {
   font-family: 'DM Sans', sans-serif;
   background: var(--green-deep);
@@ -1994,11 +1996,9 @@ function renderCustomCharts(sectionKey) {
       const bars = sorted.map(([val, cnt]) => {
         const w = Math.round((cnt/n)*100);
         return `<div class="bar-row">
-          <div class="bar-label">${val}</div>
-          <div class="bar-track-wrap">
-            <div class="bar-track">
-              <div class="bar-fill" style="width:${w}%;background:#17E88F"></div>
-            </div>
+          <div class="bar-label">${esc(val)}</div>
+          <div style="flex:1;height:22px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden;min-width:0">
+            <div style="height:100%;width:${w}%;background:#17E88F;border-radius:4px"></div>
           </div>
           <span style="font-size:0.72rem;color:var(--text-muted);min-width:65px;text-align:right">${cnt} (${w}%)</span>
         </div>`;
@@ -2028,6 +2028,23 @@ function renderCustomCharts(sectionKey) {
 
   if (!html) return '';
   return `<div class="custom-questions-block" data-section="${sectionKey}">${html}</div>`;
+}
+
+// Insert custom charts into a section container, before its first verbatim section if present
+function insertCustomChartsBlock(containerId, sectionKey) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const cqHtml = renderCustomCharts(sectionKey);
+  if (!cqHtml) return;
+  const cqBlock = document.createElement('div');
+  cqBlock.innerHTML = cqHtml;
+  const verbatimAnchor = container.querySelector('.verbatim-search');
+  if (verbatimAnchor) {
+    const verbatimCard = verbatimAnchor.closest('.chart-card') || verbatimAnchor.parentElement;
+    container.insertBefore(cqBlock, verbatimCard);
+  } else {
+    container.appendChild(cqBlock);
+  }
 }
 
 // ─── CHART BUILDERS ───────────────────────────────────────────────────────────
@@ -2310,9 +2327,7 @@ function renderDemo() {
     html += `<div class="chart-card"><div class="chart-card-title">${label} <span>N=${tot}</span></div>${bars}</div>`;
   });
   document.getElementById('demoCharts').innerHTML = html || '<div class="empty-state">No data for current filters.</div>';
-  const cqBlockDemo = document.createElement('div');
-  cqBlockDemo.innerHTML = renderCustomCharts('demographics');
-  document.getElementById('demoCharts').after(cqBlockDemo);
+  insertCustomChartsBlock('demoCharts', 'demographics');
 }
 
 // ─── SPACE ────────────────────────────────────────────────────────────────────
@@ -2492,9 +2507,7 @@ function renderSpace() {
 
   document.getElementById('spaceContent').innerHTML = html;
   removeEmptyChartCards('spaceContent');
-  const cqBlockSpace = document.createElement('div');
-  cqBlockSpace.innerHTML = renderCustomCharts('space');
-  document.getElementById('spaceContent').after(cqBlockSpace);
+  insertCustomChartsBlock('spaceContent', 'space');
 }
 
 // ─── RELATIONSHIPS ────────────────────────────────────────────────────────────
@@ -2662,9 +2675,7 @@ function renderRel() {
 
   document.getElementById('relContent').innerHTML = html;
   removeEmptyChartCards('relContent');
-  const cqBlockRel = document.createElement('div');
-  cqBlockRel.innerHTML = renderCustomCharts('relationships');
-  document.getElementById('relContent').after(cqBlockRel);
+  insertCustomChartsBlock('relContent', 'relationships');
 }
 
 // ─── WVP ──────────────────────────────────────────────────────────────────────
@@ -2803,9 +2814,7 @@ function renderWVP() {
 
   document.getElementById('wvpContent').innerHTML = html;
   removeEmptyChartCards('wvpContent');
-  const cqBlockWvp = document.createElement('div');
-  cqBlockWvp.innerHTML = renderCustomCharts('wvp');
-  document.getElementById('wvpContent').after(cqBlockWvp);
+  insertCustomChartsBlock('wvpContent', 'wvp');
 }
 
 // ─── FUTURE ───────────────────────────────────────────────────────────────────
@@ -3065,9 +3074,7 @@ function renderFuture() {
 
   document.getElementById('futureContent').innerHTML = html;
   removeEmptyChartCards('futureContent');
-  const cqBlockFuture = document.createElement('div');
-  cqBlockFuture.innerHTML = renderCustomCharts('future');
-  document.getElementById('futureContent').after(cqBlockFuture);
+  insertCustomChartsBlock('futureContent', 'future');
 }
 
 // ─── PERSONALITY SCALES SVG ───────────────────────────────────────────────────
@@ -3287,9 +3294,7 @@ function renderAttendance() {
 
   if (!dims.some(d => d.score > 0)) {
     document.getElementById('attendanceContent').innerHTML = `<div style="color:var(--text-muted);font-size:0.9rem;padding:2rem 0">No attendance driver data found for this dataset. Expected columns: OPOTBEN.*</div>`;
-    const cqBlockAttendanceEarly = document.createElement('div');
-    cqBlockAttendanceEarly.innerHTML = renderCustomCharts('attendance');
-    document.getElementById('attendanceContent').after(cqBlockAttendanceEarly);
+    insertCustomChartsBlock('attendanceContent', 'attendance');
     return;
   }
 
@@ -3326,9 +3331,7 @@ function renderAttendance() {
 
   document.getElementById('attendanceContent').innerHTML = html;
   removeEmptyChartCards('attendanceContent');
-  const cqBlockAttendance = document.createElement('div');
-  cqBlockAttendance.innerHTML = renderCustomCharts('attendance');
-  document.getElementById('attendanceContent').after(cqBlockAttendance);
+  insertCustomChartsBlock('attendanceContent', 'attendance');
 }
 
 // ─── WORK STYLES ──────────────────────────────────────────────────────────────
@@ -3410,9 +3413,7 @@ function renderWorkStyles() {
 
   document.getElementById('workStylesContent').innerHTML = html;
   removeEmptyChartCards('workStylesContent');
-  const cqBlockWorkStyles = document.createElement('div');
-  cqBlockWorkStyles.innerHTML = renderCustomCharts('workstyles');
-  document.getElementById('workStylesContent').after(cqBlockWorkStyles);
+  insertCustomChartsBlock('workStylesContent', 'workstyles');
 }
 
 // ── Verbatim search filter ─────────────────────────────────────────────────────
@@ -4203,9 +4204,7 @@ function renderSentiment() {
 
   document.getElementById('sentimentContent').innerHTML = html;
   removeEmptyChartCards('sentimentContent');
-  const cqBlockSentiment = document.createElement('div');
-  cqBlockSentiment.innerHTML = renderCustomCharts('sentiment');
-  document.getElementById('sentimentContent').after(cqBlockSentiment);
+  insertCustomChartsBlock('sentimentContent', 'sentiment');
 }
 
 // ─── PDF REPORT EXPORT ────────────────────────────────────────────────────────
