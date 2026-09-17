@@ -2977,11 +2977,14 @@ function renderFuture() {
   </div>`;
 
   // ── Trade-offs ────────────────────────────────────────────────────────
-  const td = C.TRADE.map((col,i) => ({label:C.TRADE_L[i],...likertDist(rows,col)})).sort((a,b)=>(b.avg||0)-(a.avg||0));
+  const td = C.TRADE.map((col,i) => ({label:C.TRADE_L[i],...likertDist(rows,col)}))
+    .filter(d => d.t > 0)
+    .sort((a,b)=>(b.avg||0)-(a.avg||0));
 
   // Store for export
   window._lastTradeoffData = td;
 
+  if (td.length) {
   html += `<div class="chart-card">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem">
       <div class="chart-card-title" style="margin-bottom:0">Trade-off Preferences</div>
@@ -3023,6 +3026,7 @@ function renderFuture() {
   });
 
   html += `</div></div>`;
+  } // end if (td.length)
 
   // ── Amenities ─────────────────────────────────────────────────────────
   const ammData = C.AMM.map((col,i) => {
