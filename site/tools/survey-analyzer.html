@@ -787,6 +787,8 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
       <button class="tab-btn" data-tab="attendance">Attendance Drivers</button>
       <button class="tab-btn" data-tab="workstyles">Work Styles</button>
       <button class="tab-btn" data-tab="sentiment">Sentiment Analysis</button>
+      <div class="tab-sep"></div>
+      <button onclick="showCustomQuestionsPanel()" style="width:100%;text-align:left;background:none;border:1px dashed rgba(23,232,143,0.3);border-radius:6px;padding:0.5rem 0.75rem;font-size:0.74rem;color:rgba(23,232,143,0.7);cursor:pointer;font-family:inherit;margin-top:0.5rem">⚙ Custom Questions</button>
     </div>
 
     <!-- CONTENT AREA -->
@@ -922,6 +924,24 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
 
     </div><!-- /app-content -->
   </div><!-- /app-layout -->
+<div id="customQModal" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.7);align-items:center;justify-content:center;padding:1.5rem">
+  <div style="background:#012A2D;border:1px solid var(--card-border);border-radius:12px;width:100%;max-width:700px;max-height:90vh;overflow-y:auto;padding:2rem">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem">
+      <div>
+        <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:rgba(23,232,143,0.6);margin-bottom:0.3rem">Configuration</div>
+        <h2 style="font-size:1.3rem;font-weight:700;color:var(--text);margin:0">Custom Questions</h2>
+      </div>
+      <button onclick="closeCustomQModal()" style="background:none;border:1px solid var(--card-border);border-radius:6px;padding:0.4rem 0.75rem;color:var(--text-muted);cursor:pointer;font-size:0.85rem">✕ Close</button>
+    </div>
+    <p style="font-size:0.83rem;color:var(--text-muted);margin:0 0 1.5rem">Add client-specific questions to the dashboard. Each question renders as a chart in its assigned section and is included in the client package.</p>
+    <div id="customQList" style="display:flex;flex-direction:column;gap:0.75rem;margin-bottom:1.25rem"></div>
+    <button onclick="addCustomQuestionRow()" style="background:none;border:1px dashed rgba(23,232,143,0.4);border-radius:8px;padding:0.6rem 1.25rem;color:rgba(23,232,143,0.8);cursor:pointer;font-size:0.85rem;font-weight:600;width:100%">+ Add Question</button>
+    <div style="display:flex;gap:0.75rem;margin-top:1.25rem;justify-content:flex-end">
+      <button onclick="closeCustomQModal()" style="background:none;border:1px solid var(--card-border);border-radius:8px;padding:0.65rem 1.25rem;color:var(--text-muted);cursor:pointer;font-size:0.9rem">Cancel</button>
+      <button onclick="saveCustomQuestions()" style="background:#17E88F;color:#001A14;border:none;border-radius:8px;padding:0.65rem 1.75rem;font-size:0.9rem;font-weight:700;cursor:pointer">Save &amp; Apply</button>
+    </div>
+  </div>
+</div>
 </div><!-- /page -->
 
 <script>
@@ -990,6 +1010,7 @@ let filteredRows = [];
 let extraDemoColumns = [];
 let qTextsMap = {};
 let allCategoricalColumns = [];
+let customQuestions = []; // [{id, code, label, scaleType, section}]
 
 // ─── PARSE HELPERS ────────────────────────────────────────────────────────────
 function parseLikert(val) {
@@ -1530,6 +1551,7 @@ function initApp() {
     qTextsMap        = p.qTextsMap        || {};
     extraDemoColumns = p.extraDemoColumns || [];
     if (p.cOverrides) Object.assign(C, p.cOverrides);
+    if (p.customQuestions) customQuestions = p.customQuestions;
     const m = p.meta || {};
     const cn = document.getElementById('clientName');
     const si = document.getElementById('sectorInput');
@@ -1543,12 +1565,15 @@ function initApp() {
   buildFilters();
   applyFilters();
   checkColumns();
+  const p2 = window.__PRELOADED__;
+  if (!p2 || !p2.customQuestions) loadCustomQuestionsFromStorage();
 }
 
 function resetApp() {
   allRows = [];
   filteredRows = [];
   colIdx = {};
+  customQuestions = [];
   document.getElementById('appLayout').classList.remove('active');
   document.getElementById('uploadScreen').style.display = '';
   document.getElementById('uploadError').style.display = 'none';
@@ -1768,6 +1793,241 @@ function renderActive() {
   });
   const fns = { execsummary: renderExecSummary, demographics: renderDemo, space: renderSpace, relationships: renderRel, wvp: renderWVP, future: renderFuture, attendance: renderAttendance, workstyles: renderWorkStyles, sentiment: renderSentiment };
   if (fns[tab]) fns[tab]();
+}
+
+// ─── CUSTOM QUESTIONS ─────────────────────────────────────────────────────────
+
+const CQ_SECTIONS = [
+  { key: 'demographics',   label: 'Demographics' },
+  { key: 'space',          label: 'Space, Design & Function' },
+  { key: 'relationships',  label: 'Relationships & Collaboration' },
+  { key: 'wvp',            label: 'WVP & Attachment' },
+  { key: 'future',         label: 'Future Preferences' },
+  { key: 'attendance',     label: 'Attendance Drivers' },
+  { key: 'workstyles',     label: 'Work Styles' },
+  { key: 'sentiment',      label: 'Sentiment Analysis' },
+];
+
+const CQ_SCALES = [
+  { key: 'agreement4',  label: 'Agreement 1–4 (Strongly Agree → Strongly Disagree)' },
+  { key: 'importance4', label: 'Importance 1–4 (Very Important → Not Important)' },
+  { key: 'categorical', label: 'Categorical (distribution bars)' },
+  { key: 'yesno',       label: 'Yes / No' },
+  { key: 'freetext',    label: 'Free text (verbatim list)' },
+];
+
+// Storage key based on column hash (same approach as column mapping)
+function cqStorageKey() {
+  const codes = Object.keys(colIdx).sort().join('|');
+  let h = 0;
+  for (let i = 0; i < codes.length; i++) { h = (Math.imul(31, h) + codes.charCodeAt(i)) | 0; }
+  return 'customq_' + Math.abs(h).toString(36);
+}
+
+function showCustomQuestionsPanel() {
+  // Load saved state into working copy
+  _cqDraft = customQuestions.map(q => ({...q}));
+  renderCustomQList();
+  document.getElementById('customQModal').style.display = 'flex';
+}
+
+function closeCustomQModal() {
+  document.getElementById('customQModal').style.display = 'none';
+}
+
+let _cqDraft = [];
+
+function addCustomQuestionRow() {
+  _cqDraft.push({ id: 'cq_' + Date.now(), code: '', label: '', scaleType: 'agreement4', section: 'space' });
+  renderCustomQList();
+}
+
+function removeCustomQuestionRow(id) {
+  _cqDraft = _cqDraft.filter(q => q.id !== id);
+  renderCustomQList();
+}
+
+function renderCustomQList() {
+  const allCols = Object.keys(colIdx).sort();
+  const colOptions = `<option value="">(select column)</option>` + allCols.map(c => {
+    const qt = (qTextsMap[c] || '').slice(0, 60);
+    const label = qt ? `${c} — ${qt}` : c;
+    return `<option value="${c}">${label}</option>`;
+  }).join('');
+
+  const el = document.getElementById('customQList');
+  if (!_cqDraft.length) {
+    el.innerHTML = `<div style="text-align:center;padding:1.5rem;color:var(--text-muted);font-size:0.83rem">No custom questions yet. Click "+ Add Question" to get started.</div>`;
+    return;
+  }
+
+  el.innerHTML = _cqDraft.map((q, idx) => {
+    const colOpts = colOptions.replace(`value="${q.code}"`, `value="${q.code}" selected`);
+    const scaleOpts = CQ_SCALES.map(s => `<option value="${s.key}"${q.scaleType===s.key?' selected':''}>${s.label}</option>`).join('');
+    const sectionOpts = CQ_SECTIONS.map(s => `<option value="${s.key}"${q.section===s.key?' selected':''}>${s.label}</option>`).join('');
+    return `<div style="background:rgba(255,255,255,0.04);border:1px solid var(--card-border);border-radius:8px;padding:1rem;display:grid;gap:0.6rem">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted)">Question ${idx+1}</span>
+        <button onclick="removeCustomQuestionRow('${q.id}')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.8rem;padding:0.2rem 0.4rem;border-radius:4px" onmouseover="this.style.color='#ff6b6b'" onmouseout="this.style.color='var(--text-muted)'">✕ Remove</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem">
+        <div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.3rem">Column</div>
+          <select onchange="_cqDraft[${idx}].code=this.value" style="width:100%;background:var(--card-bg);border:1px solid var(--card-border);border-radius:6px;padding:0.45rem 0.6rem;color:var(--text);font-size:0.8rem;font-family:inherit">${colOpts}</select>
+        </div>
+        <div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.3rem">Chart Label</div>
+          <input type="text" value="${q.label.replace(/"/g,'&quot;')}" oninput="_cqDraft[${idx}].label=this.value" placeholder="e.g. Parking Access Satisfaction" style="width:100%;background:var(--card-bg);border:1px solid var(--card-border);border-radius:6px;padding:0.45rem 0.6rem;color:var(--text);font-size:0.8rem;font-family:inherit;box-sizing:border-box">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem">
+        <div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.3rem">Scale / Response Type</div>
+          <select onchange="_cqDraft[${idx}].scaleType=this.value" style="width:100%;background:var(--card-bg);border:1px solid var(--card-border);border-radius:6px;padding:0.45rem 0.6rem;color:var(--text);font-size:0.8rem;font-family:inherit">${scaleOpts}</select>
+        </div>
+        <div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.3rem">Dashboard Section</div>
+          <select onchange="_cqDraft[${idx}].section=this.value" style="width:100%;background:var(--card-bg);border:1px solid var(--card-border);border-radius:6px;padding:0.45rem 0.6rem;color:var(--text);font-size:0.8rem;font-family:inherit">${sectionOpts}</select>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function saveCustomQuestions() {
+  // Validate — require code on each row
+  const invalid = _cqDraft.filter(q => !q.code);
+  if (invalid.length) {
+    alert('Please select a column for each custom question before saving.');
+    return;
+  }
+  // Fill label from question text if left blank
+  _cqDraft.forEach(q => {
+    if (!q.label) q.label = qTextsMap[q.code] || q.code;
+  });
+  customQuestions = _cqDraft.map(q => ({...q}));
+  try { localStorage.setItem(cqStorageKey(), JSON.stringify(customQuestions)); } catch(e) {}
+  closeCustomQModal();
+  renderActive(); // re-render current tab so custom charts appear immediately
+}
+
+function loadCustomQuestionsFromStorage() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(cqStorageKey()) || 'null');
+    if (Array.isArray(saved)) customQuestions = saved;
+  } catch(e) {}
+}
+
+// Render all custom question charts into their sections
+function renderCustomCharts(sectionKey) {
+  const qs = customQuestions.filter(q => q.section === sectionKey && q.code && colIdx[q.code] !== undefined);
+  if (!qs.length) return '';
+
+  let html = '';
+  qs.forEach(q => {
+    const rows = filteredRows;
+    const label = q.label || qTextsMap[q.code] || q.code;
+    const tot = rows.length;
+
+    if (q.scaleType === 'agreement4' || q.scaleType === 'importance4') {
+      // Map response text to 1-4 numeric — try direct numeric first, then text matching
+      const isAgree = q.scaleType === 'agreement4';
+      const scaleLabels = isAgree
+        ? ['Strongly Disagree','Disagree','Agree','Strongly Agree']
+        : ['Not Important','Somewhat Important','Important','Very Important'];
+      const scaleColors = ['#8B1A1A','#D2785A','#80BBAD','#17E88F'];
+
+      // Count by label match (case-insensitive partial)
+      const counts = [0,0,0,0];
+      let n = 0;
+      rows.forEach(r => {
+        const v = (gv(r, q.code) || '').trim();
+        if (!v) return;
+        // Try numeric
+        const num = parseFloat(v);
+        if (!isNaN(num) && num >= 1 && num <= 4) { counts[Math.round(num)-1]++; n++; return; }
+        // Try label match (search from most positive to least)
+        const vl = v.toLowerCase();
+        for (let i = scaleLabels.length-1; i >= 0; i--) {
+          if (scaleLabels[i].toLowerCase().includes(vl) || vl.includes(scaleLabels[i].toLowerCase().split(' ')[0])) {
+            counts[i]++; n++; return;
+          }
+        }
+      });
+      if (!n) { html += `<div class="chart-card"><div class="chart-card-title">${label}</div><div class="empty-state">No data for current filters.</div></div>`; return; }
+      const avg = counts.reduce((s,c,i) => s + c*(i+1), 0) / n;
+
+      // Build stacked bar using existing buildStackedTrack pattern
+      const segData = scaleLabels.map((sl, i) => ({
+        w: (counts[i]/n)*100, label: sl, color: scaleColors[i], light: i >= 2
+      }));
+      html += `<div class="chart-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem">
+          <div class="chart-card-title" style="margin-bottom:0">${label} <span>avg ${avg.toFixed(1)}/4 · N=${n}</span></div>
+          <span style="font-size:0.7rem;color:var(--text-muted);background:rgba(23,232,143,0.1);border:1px solid rgba(23,232,143,0.2);border-radius:4px;padding:0.2rem 0.5rem">Custom Question</span>
+        </div>
+        <div class="stacked-chart">
+          <div class="bar-row">
+            <div class="bar-label" style="min-width:0;max-width:none;flex:1;white-space:normal;line-height:1.3">${label}</div>
+            <div class="bar-track-wrap" style="flex:3">
+              ${buildStackedTrack(segData)}
+            </div>
+            <span style="font-size:0.72rem;color:var(--text-muted);min-width:40px;text-align:right">${avg.toFixed(1)}</span>
+          </div>
+        </div>
+        <div class="chart-legend">
+          ${scaleLabels.map((sl,i) => `<div class="legend-item"><div class="legend-dot" style="background:${scaleColors[i]}"></div>${sl}</div>`).join('')}
+        </div>
+      </div>`;
+
+    } else if (q.scaleType === 'categorical' || q.scaleType === 'yesno') {
+      const counts = {};
+      let n = 0;
+      rows.forEach(r => {
+        const v = (gv(r, q.code) || '').trim();
+        if (!v) return;
+        counts[v] = (counts[v] || 0) + 1;
+        n++;
+      });
+      if (!n) { html += `<div class="chart-card"><div class="chart-card-title">${label}</div><div class="empty-state">No data for current filters.</div></div>`; return; }
+      const sorted = Object.entries(counts).sort((a,b) => b[1]-a[1]);
+      const bars = sorted.map(([val, cnt]) => {
+        const w = Math.round((cnt/n)*100);
+        return `<div class="bar-row">
+          <div class="bar-label">${val}</div>
+          <div class="bar-track-wrap">
+            <div class="bar-track">
+              <div class="bar-fill" style="width:${w}%;background:#17E88F"></div>
+            </div>
+          </div>
+          <span style="font-size:0.72rem;color:var(--text-muted);min-width:65px;text-align:right">${cnt} (${w}%)</span>
+        </div>`;
+      }).join('');
+      html += `<div class="chart-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem">
+          <div class="chart-card-title" style="margin-bottom:0">${label} <span>N=${n}</span></div>
+          <span style="font-size:0.7rem;color:var(--text-muted);background:rgba(23,232,143,0.1);border:1px solid rgba(23,232,143,0.2);border-radius:4px;padding:0.2rem 0.5rem">Custom Question</span>
+        </div>
+        <div class="stacked-chart">${bars}</div>
+      </div>`;
+
+    } else if (q.scaleType === 'freetext') {
+      const responses = rows.map(r => (gv(r, q.code) || '').trim()).filter(Boolean);
+      if (!responses.length) { html += `<div class="chart-card"><div class="chart-card-title">${label}</div><div class="empty-state">No responses for current filters.</div></div>`; return; }
+      const items = responses.slice(0, 20).map(r => `<div style="border-left:2px solid rgba(23,232,143,0.3);padding:0.4rem 0.75rem;font-size:0.82rem;color:var(--text);line-height:1.5">"${r.replace(/"/g,'&quot;')}"</div>`).join('');
+      html += `<div class="chart-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem">
+          <div class="chart-card-title" style="margin-bottom:0">${label} <span>${responses.length} responses</span></div>
+          <span style="font-size:0.7rem;color:var(--text-muted);background:rgba(23,232,143,0.1);border:1px solid rgba(23,232,143,0.2);border-radius:4px;padding:0.2rem 0.5rem">Custom Question</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:0.5rem">${items}</div>
+        ${responses.length > 20 ? `<div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.75rem;text-align:center">Showing 20 of ${responses.length} responses</div>` : ''}
+      </div>`;
+    }
+  });
+
+  if (!html) return '';
+  return `<div class="custom-questions-block" data-section="${sectionKey}">${html}</div>`;
 }
 
 // ─── CHART BUILDERS ───────────────────────────────────────────────────────────
@@ -2040,6 +2300,9 @@ function renderDemo() {
     html += `<div class="chart-card"><div class="chart-card-title">${label} <span>N=${tot}</span></div>${bars}</div>`;
   });
   document.getElementById('demoCharts').innerHTML = html || '<div class="empty-state">No data for current filters.</div>';
+  const cqBlockDemo = document.createElement('div');
+  cqBlockDemo.innerHTML = renderCustomCharts('demographics');
+  document.getElementById('demoCharts').after(cqBlockDemo);
 }
 
 // ─── SPACE ────────────────────────────────────────────────────────────────────
@@ -2218,6 +2481,9 @@ function renderSpace() {
   }
 
   document.getElementById('spaceContent').innerHTML = html;
+  const cqBlockSpace = document.createElement('div');
+  cqBlockSpace.innerHTML = renderCustomCharts('space');
+  document.getElementById('spaceContent').after(cqBlockSpace);
 }
 
 // ─── RELATIONSHIPS ────────────────────────────────────────────────────────────
@@ -2384,6 +2650,9 @@ function renderRel() {
   }
 
   document.getElementById('relContent').innerHTML = html;
+  const cqBlockRel = document.createElement('div');
+  cqBlockRel.innerHTML = renderCustomCharts('relationships');
+  document.getElementById('relContent').after(cqBlockRel);
 }
 
 // ─── WVP ──────────────────────────────────────────────────────────────────────
@@ -2481,6 +2750,9 @@ function renderWVP() {
   html += `</div>${likertLegend()}</div>`;
 
   document.getElementById('wvpContent').innerHTML = html;
+  const cqBlockWvp = document.createElement('div');
+  cqBlockWvp.innerHTML = renderCustomCharts('wvp');
+  document.getElementById('wvpContent').after(cqBlockWvp);
 }
 
 // ─── FUTURE ───────────────────────────────────────────────────────────────────
@@ -2727,6 +2999,9 @@ function renderFuture() {
   </div></div>`;
 
   document.getElementById('futureContent').innerHTML = html;
+  const cqBlockFuture = document.createElement('div');
+  cqBlockFuture.innerHTML = renderCustomCharts('future');
+  document.getElementById('futureContent').after(cqBlockFuture);
 }
 
 // ─── PERSONALITY SCALES SVG ───────────────────────────────────────────────────
@@ -2946,6 +3221,9 @@ function renderAttendance() {
 
   if (!dims.some(d => d.score > 0)) {
     document.getElementById('attendanceContent').innerHTML = `<div style="color:var(--text-muted);font-size:0.9rem;padding:2rem 0">No attendance driver data found for this dataset. Expected columns: OPOTBEN.*</div>`;
+    const cqBlockAttendanceEarly = document.createElement('div');
+    cqBlockAttendanceEarly.innerHTML = renderCustomCharts('attendance');
+    document.getElementById('attendanceContent').after(cqBlockAttendanceEarly);
     return;
   }
 
@@ -2981,6 +3259,9 @@ function renderAttendance() {
   </div>`;
 
   document.getElementById('attendanceContent').innerHTML = html;
+  const cqBlockAttendance = document.createElement('div');
+  cqBlockAttendance.innerHTML = renderCustomCharts('attendance');
+  document.getElementById('attendanceContent').after(cqBlockAttendance);
 }
 
 // ─── WORK STYLES ──────────────────────────────────────────────────────────────
@@ -3061,6 +3342,9 @@ function renderWorkStyles() {
 
 
   document.getElementById('workStylesContent').innerHTML = html;
+  const cqBlockWorkStyles = document.createElement('div');
+  cqBlockWorkStyles.innerHTML = renderCustomCharts('workstyles');
+  document.getElementById('workStylesContent').after(cqBlockWorkStyles);
 }
 
 // ── Verbatim search filter ─────────────────────────────────────────────────────
@@ -3867,6 +4151,9 @@ function renderSentiment() {
   }
 
   document.getElementById('sentimentContent').innerHTML = html;
+  const cqBlockSentiment = document.createElement('div');
+  cqBlockSentiment.innerHTML = renderCustomCharts('sentiment');
+  document.getElementById('sentimentContent').after(cqBlockSentiment);
 }
 
 // ─── PDF REPORT EXPORT ────────────────────────────────────────────────────────
@@ -4533,7 +4820,7 @@ function downloadClientPackage() {
   });
 
   // Escape closing-script tags in JSON to avoid breaking the injected script block
-  const dataJson = JSON.stringify({ allRows, colIdx, qTextsMap, extraDemoColumns, cOverrides, meta: { clientName, sector, headcount } })
+  const dataJson = JSON.stringify({ allRows, colIdx, qTextsMap, extraDemoColumns, cOverrides, customQuestions, meta: { clientName, sector, headcount } })
                     .replace(/<\/script>/gi, '<\\/script>');
 
   const preloadScript = `<script>window.__PRELOADED__=${dataJson};<\/script>`;
