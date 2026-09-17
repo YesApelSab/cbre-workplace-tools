@@ -2065,7 +2065,7 @@ function buildStackedTrack(segData) {
 
 function stackedBar(label, d, t, a, lblClass, orgAvg) {
   lblClass = lblClass || 'bar-label';
-  if (!t) return `<div class="bar-row"><span class="${lblClass}">${label}</span><span style="font-size:0.72rem;color:var(--text-muted)">No data</span></div>`;
+  if (!t) return '';
   const segData = [1,2,3,4].map((s,i) => ({
     w: pct(d[s], t), color: L5_COLORS[i], light: i === 0 || i === 3, name: L5_LABELS[i]
   }));
@@ -2077,7 +2077,7 @@ function stackedBar(label, d, t, a, lblClass, orgAvg) {
 }
 
 function supplyBar(label, c) {
-  if (!c.t) return `<div class="bar-row"><span class="bar-label">${label}</span><span style="font-size:0.72rem;color:var(--text-muted)">No data</span></div>`;
+  if (!c.t) return '';
   const segData = [
     {w:pct(c.n,c.t), color:'#8B1A1A', name:'None',         textColor:'rgba(255,255,255,0.9)'},
     {w:pct(c.l,c.t), color:'#D2785A', name:'Too little',   textColor:'rgba(0,0,0,0.7)'},
@@ -2102,6 +2102,16 @@ function hBar(label, val, color) {
 
 function likertLegend() {
   return `<div class="chart-legend">${L5_LABELS.map((l,i) => `<div class="legend-item"><div class="legend-dot" style="background:${L5_COLORS[i]}"></div>${l}</div>`).join('')}</div>`;
+}
+
+// Remove chart cards whose .stacked-chart rendered entirely empty (all rows had no data)
+function removeEmptyChartCards(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.querySelectorAll('.chart-card').forEach(card => {
+    const sc = card.querySelector('.stacked-chart');
+    if (sc && !sc.children.length && !sc.textContent.trim()) card.remove();
+  });
 }
 function likertLegendImportance() {
   const IMP_LABELS = ['Not important','Somewhat important','Important','Very important'];
@@ -2481,6 +2491,7 @@ function renderSpace() {
   }
 
   document.getElementById('spaceContent').innerHTML = html;
+  removeEmptyChartCards('spaceContent');
   const cqBlockSpace = document.createElement('div');
   cqBlockSpace.innerHTML = renderCustomCharts('space');
   document.getElementById('spaceContent').after(cqBlockSpace);
@@ -2650,6 +2661,7 @@ function renderRel() {
   }
 
   document.getElementById('relContent').innerHTML = html;
+  removeEmptyChartCards('relContent');
   const cqBlockRel = document.createElement('div');
   cqBlockRel.innerHTML = renderCustomCharts('relationships');
   document.getElementById('relContent').after(cqBlockRel);
@@ -2749,7 +2761,48 @@ function renderWVP() {
   sorted.forEach(d => html += stackedBar(d.label, d.d, d.t, d.avg, null, d.orgAvg));
   html += `</div>${likertLegend()}</div>`;
 
+  // ── Verbatims (Q42 / Q43) ─────────────────────────────────────────────
+  const posVbm = rows.map(r => ({ text: gv(r, C.Q42), dept: gv(r, C.DEPT) })).filter(v => v.text && v.text.length > 10);
+  const negVbm = rows.map(r => ({ text: gv(r, C.Q43), dept: gv(r, C.DEPT) })).filter(v => v.text && v.text.length > 10);
+  if (posVbm.length || negVbm.length) {
+    const VLIMITwvp = 25;
+    const wvpVerbBlock = (items, cls) => {
+      let h = `<div class="verbatim-list" style="margin-bottom:0.5rem">`;
+      items.slice(0, VLIMITwvp).forEach(v => {
+        h += `<div class="${cls}">"${esc(v.text)}"${v.dept ? `<span class="verbatim-dept">${esc(v.dept)}</span>` : ''}</div>`;
+      });
+      if (items.length > VLIMITwvp) {
+        h += `<div class="verbatim-overflow" style="display:none">`;
+        items.slice(VLIMITwvp).forEach(v => {
+          h += `<div class="${cls}">"${esc(v.text)}"${v.dept ? `<span class="verbatim-dept">${esc(v.dept)}</span>` : ''}</div>`;
+        });
+        h += `</div><button class="verbatim-more-btn" onclick="this.previousElementSibling.style.display='block';this.style.display='none'">Show ${items.length - VLIMITwvp} more responses ▼</button>`;
+      }
+      h += `</div>`;
+      return h;
+    };
+    const totalVbm = posVbm.length + negVbm.length;
+    html += `<div class="chart-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem">
+        <div>
+          <div class="chart-card-title" style="margin-bottom:0.15rem">Verbatim Responses <span>${totalVbm} total</span></div>
+          <div style="font-size:0.68rem;color:var(--text-muted)">Showing up to ${VLIMITwvp} responses per question — use the search box to filter</div>
+        </div>
+      </div>
+      <input type="text" class="verbatim-search" placeholder="🔍 Search verbatims..." oninput="filterVerbatims(this.value)">`;
+    if (posVbm.length) {
+      html += `<div style="font-size:0.72rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#17E88F;margin-bottom:0.5rem;margin-top:0.25rem">What Employees Look Forward To (${posVbm.length})</div>`;
+      html += wvpVerbBlock(posVbm, 'verbatim-item');
+    }
+    if (negVbm.length) {
+      html += `<div style="font-size:0.72rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#D2785A;margin-bottom:0.5rem;margin-top:${posVbm.length ? '1.1rem' : '0.25rem'}">What Employees Don't Look Forward To (${negVbm.length})</div>`;
+      html += wvpVerbBlock(negVbm, 'verbatim-item neg');
+    }
+    html += `</div>`;
+  }
+
   document.getElementById('wvpContent').innerHTML = html;
+  removeEmptyChartCards('wvpContent');
   const cqBlockWvp = document.createElement('div');
   cqBlockWvp.innerHTML = renderCustomCharts('wvp');
   document.getElementById('wvpContent').after(cqBlockWvp);
@@ -2763,14 +2816,21 @@ function renderFuture() {
 
   // ── Data prep ─────────────────────────────────────────────────────────
   // Canonical order + colors for known label variants (case-insensitive match)
+  // NOTE: more-specific entries must come before entries whose patterns are substrings of them
   const locCanonical = [
-    { key:'fully remote',  label:'Fully remote',  color:'#D2785A', pat:['fully remote'] },
-    { key:'mostly home',   label:'Mostly home',   color:'#DBD99A', pat:['mostly home','mostly at home'] },
-    { key:'equal mix',     label:'Equal mix',     color:'#80BBAD', pat:['equal mix','mix of both','hybrid'] },
-    { key:'mostly office', label:'Mostly office', color:'#17E88F', pat:['mostly office','mostly at the office','mostly at the main'] },
-    { key:'fully office',  label:'Fully office',  color:'#0EA86B', pat:['fully office','fully at the office','fully at the main'] },
+    { key:'fully remote',  label:'Fully remote',              color:'#D2785A', pat:['fully remote'] },
+    { key:'flex remote',   label:'Remote (office optional)',  color:'#C4895A', pat:['remote with the option','remote with option to use'] },
+    { key:'mostly home',   label:'Mostly home',               color:'#DBD99A', pat:['mostly home','mostly at home'] },
+    { key:'equal mix',     label:'Equal mix',                 color:'#80BBAD', pat:['equal mix','mix of both','hybrid'] },
+    { key:'mostly office', label:'Mostly office',             color:'#17E88F', pat:['mostly office','mostly at the office','mostly at the main'] },
+    { key:'fully office',  label:'Fully office',              color:'#0EA86B', pat:['fully office','fully at the office','fully at the main'] },
   ];
-  const matchLocCanon = (rawLabel, entry) => { const rl = rawLabel.toLowerCase().trim(); return entry.pat.some(p => rl === p || rl.includes(p)); };
+  const matchLocCanon = (rawLabel, entry) => {
+    const rl = rawLabel.toLowerCase().trim();
+    // 'fully remote' must not absorb 'fully remote with the option to use...'
+    if (entry.key === 'fully remote') return rl === 'fully remote' || (rl.startsWith('fully remote') && !rl.includes('option'));
+    return entry.pat.some(p => rl === p || rl.includes(p));
+  };
   const fallbackColors = ['#538184','#9DB5AF','#3A5A50','#6B8F7A','#A0C4B0'];
 
   const lc = countBy(rows, C.Q45);
@@ -2800,9 +2860,10 @@ function renderFuture() {
   // Summary stats are derived from the rounded tile percentages so they always
   // match what is displayed (avoids rounding divergence from independent calculations).
   const tilePct = (entry) => locTotal ? pct(entry.n, locTotal) : 0;
-  const officePct = locEnts.filter(e => matchLocCanon(e.rawLabel, locCanonical[3]) || matchLocCanon(e.rawLabel, locCanonical[4])).reduce((s,e) => s + tilePct(e), 0);
-  const remotePct = locEnts.filter(e => matchLocCanon(e.rawLabel, locCanonical[0]) || matchLocCanon(e.rawLabel, locCanonical[1])).reduce((s,e) => s + tilePct(e), 0);
-  const hybridPct = locEnts.filter(e => matchLocCanon(e.rawLabel, locCanonical[2])).reduce((s,e) => s + tilePct(e), 0);
+  const findCanon = (key) => locCanonical.find(c => c.key === key);
+  const officePct = locEnts.filter(e => matchLocCanon(e.rawLabel, findCanon('mostly office')) || matchLocCanon(e.rawLabel, findCanon('fully office'))).reduce((s,e) => s + tilePct(e), 0);
+  const remotePct = locEnts.filter(e => matchLocCanon(e.rawLabel, findCanon('fully remote')) || matchLocCanon(e.rawLabel, findCanon('flex remote')) || matchLocCanon(e.rawLabel, findCanon('mostly home'))).reduce((s,e) => s + tilePct(e), 0);
+  const hybridPct = locEnts.filter(e => matchLocCanon(e.rawLabel, findCanon('equal mix'))).reduce((s,e) => s + tilePct(e), 0);
   const topLocLabel = locEnts.length ? locEnts.reduce((a,b) => b.n > a.n ? b : a) : null;
   const topRBen     = rb[0];
   const topOBen     = ob[0];
@@ -2999,6 +3060,7 @@ function renderFuture() {
   </div></div>`;
 
   document.getElementById('futureContent').innerHTML = html;
+  removeEmptyChartCards('futureContent');
   const cqBlockFuture = document.createElement('div');
   cqBlockFuture.innerHTML = renderCustomCharts('future');
   document.getElementById('futureContent').after(cqBlockFuture);
@@ -3259,6 +3321,7 @@ function renderAttendance() {
   </div>`;
 
   document.getElementById('attendanceContent').innerHTML = html;
+  removeEmptyChartCards('attendanceContent');
   const cqBlockAttendance = document.createElement('div');
   cqBlockAttendance.innerHTML = renderCustomCharts('attendance');
   document.getElementById('attendanceContent').after(cqBlockAttendance);
@@ -3342,6 +3405,7 @@ function renderWorkStyles() {
 
 
   document.getElementById('workStylesContent').innerHTML = html;
+  removeEmptyChartCards('workStylesContent');
   const cqBlockWorkStyles = document.createElement('div');
   cqBlockWorkStyles.innerHTML = renderCustomCharts('workstyles');
   document.getElementById('workStylesContent').after(cqBlockWorkStyles);
@@ -4083,53 +4147,36 @@ function renderSentiment() {
   </div>
   </div></div></div>`;
 
-  // ── Verbatims ─────────────────────────────────────────────────────────
-  const posData = rows.map(r => ({ text: gv(r, C.Q42), dept: gv(r, C.DEPT), qtag: 'Q42' })).filter(v => v.text && v.text.length > 10);
-  const negData = rows.map(r => ({ text: gv(r, C.Q43), dept: gv(r, C.DEPT), qtag: 'Q43' })).filter(v => v.text && v.text.length > 10);
-  const specVData = rows.map(r => ({ text: gv(r, C.Q26), dept: gv(r, C.DEPT), qtag: 'Q26' })).filter(v => v.text && v.text.length > 5);
-
-  if (posData.length || negData.length || specVData.length) {
+  // ── Verbatims (Q26 specialty space) ──────────────────────────────────
+  const specVData = rows.map(r => ({ text: gv(r, C.Q26), dept: gv(r, C.DEPT) })).filter(v => v.text && v.text.length > 5);
+  if (specVData.length) {
     const VLIMIT = 25;
-    function verbatimBlock(items, cls) {
+    const sentVerbBlock = (items, cls) => {
       let h = `<div class="verbatim-list" style="margin-bottom:0.5rem">`;
       items.slice(0, VLIMIT).forEach(v => {
-        h += `<div class="${cls}">"${esc(v.text)}"${v.qtag ? `<span class="verbatim-dept" style="color:var(--accent);border-color:rgba(23,232,143,0.3)">${v.qtag}</span>` : ''}${v.dept ? `<span class="verbatim-dept">${esc(v.dept)}</span>` : ''}</div>`;
+        h += `<div class="${cls}">"${esc(v.text)}"${v.dept ? `<span class="verbatim-dept">${esc(v.dept)}</span>` : ''}</div>`;
       });
       if (items.length > VLIMIT) {
         h += `<div class="verbatim-overflow" style="display:none">`;
         items.slice(VLIMIT).forEach(v => {
-          h += `<div class="${cls}">"${esc(v.text)}"${v.qtag ? `<span class="verbatim-dept" style="color:var(--accent);border-color:rgba(23,232,143,0.3)">${v.qtag}</span>` : ''}${v.dept ? `<span class="verbatim-dept">${esc(v.dept)}</span>` : ''}</div>`;
+          h += `<div class="${cls}">"${esc(v.text)}"${v.dept ? `<span class="verbatim-dept">${esc(v.dept)}</span>` : ''}</div>`;
         });
-        h += `</div>`;
-        h += `<button class="verbatim-more-btn" onclick="this.previousElementSibling.style.display='block';this.style.display='none'">Show ${items.length - VLIMIT} more responses ▼</button>`;
+        h += `</div><button class="verbatim-more-btn" onclick="this.previousElementSibling.style.display='block';this.style.display='none'">Show ${items.length - VLIMIT} more responses ▼</button>`;
       }
       h += `</div>`;
       return h;
-    }
-    const totalV = posData.length + negData.length + specVData.length;
+    };
     html += `<div class="chart-card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem">
         <div>
-          <div class="chart-card-title" style="margin-bottom:0.15rem">Verbatim Responses <span>${totalV} total</span></div>
+          <div class="chart-card-title" style="margin-bottom:0.15rem">Verbatim Responses <span>${specVData.length} total</span></div>
           <div style="font-size:0.68rem;color:var(--text-muted)">Showing up to ${VLIMIT} responses per question — use the search box to filter</div>
         </div>
       </div>
-      <input type="text" class="verbatim-search" placeholder="🔍 Search verbatims..." oninput="filterVerbatims(this.value)">`;
-    if (posData.length) {
-      html += `<div style="font-size:0.72rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#17E88F;margin-bottom:0.5rem;margin-top:0.25rem">Q42 · What Employees Look Forward To (${posData.length})</div>`;
-      html += verbatimBlock(posData, 'verbatim-item');
-    }
-    if (negData.length) {
-      html += `<div style="font-size:0.72rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#D2785A;margin-bottom:0.5rem;margin-top:${posData.length ? '1.1rem' : '0.25rem'}">Q43 · What Employees Don't Look Forward To (${negData.length})</div>`;
-      html += verbatimBlock(negData, 'verbatim-item neg');
-    }
-    if (specVData.length) {
-      html += `<div style="font-size:0.72rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#80BBAD;margin-bottom:0.5rem;margin-top:${(posData.length || negData.length) ? '1.1rem' : '0.25rem'}">Q26 · Specialty Space Requirements (${specVData.length})</div>`;
-      html += verbatimBlock(specVData, 'verbatim-item');
-    }
+      <input type="text" class="verbatim-search" placeholder="🔍 Search verbatims..." oninput="filterVerbatims(this.value)">
+      <div style="font-size:0.72rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#80BBAD;margin-bottom:0.5rem;margin-top:0.25rem">Q26 · Specialty Space Requirements (${specVData.length})</div>`;
+    html += sentVerbBlock(specVData, 'verbatim-item');
     html += `</div>`;
-  } else {
-    html += `<div class="field-notice">No verbatim responses found. Columns Q42.A1 and Q43.A1 may be empty in this dataset.</div>`;
   }
 
   // ── Final Comments (Q51) ──────────────────────────────────────────────
@@ -4151,6 +4198,7 @@ function renderSentiment() {
   }
 
   document.getElementById('sentimentContent').innerHTML = html;
+  removeEmptyChartCards('sentimentContent');
   const cqBlockSentiment = document.createElement('div');
   cqBlockSentiment.innerHTML = renderCustomCharts('sentiment');
   document.getElementById('sentimentContent').after(cqBlockSentiment);
