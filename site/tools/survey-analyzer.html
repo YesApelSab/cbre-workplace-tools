@@ -1324,9 +1324,9 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     if (!code || !code.trim()) return;
     const qt = (qTexts[i] || '').toLowerCase();
     if (
-      (qt.includes('which') && (qt.includes('business unit') || qt.includes('department') || qt.includes('team')) && (qt.includes('work with') || qt.includes('collaborate') || qt.includes('most frequently'))) ||
+      (qt.includes('which') && (qt.includes('business unit') || qt.includes('department') || qt.includes('team') || qt.includes('division') || qt.includes('office')) && (qt.includes('work with') || qt.includes('collaborate') || qt.includes('most frequently'))) ||
       (qt.includes('cross-team') || qt.includes('cross team')) ||
-      (qt.includes('top') && qt.includes('collaborat') && (qt.includes('department') || qt.includes('team') || qt.includes('unit')))
+      (qt.includes('top') && qt.includes('collaborat') && (qt.includes('department') || qt.includes('team') || qt.includes('unit') || qt.includes('division') || qt.includes('office')))
     ) { q13Detected.push(code.trim()); }
   });
   if (q13Detected.length) C.Q13 = q13Detected;
@@ -2299,6 +2299,67 @@ function renderExecSummary() {
   if (satAvg !== null) { const label=parseFloat(satAvg)>=7?'strong workplace satisfaction':'room for improvement in overall satisfaction'; sentIns.push({ icon:'⭐', text:`Overall satisfaction averages <strong>${satAvg}/10</strong>, indicating ${label}.` }); }
   html += insightCard('💬', 'Sentiment Analysis', sentIns);
 
+  // ── Department Deviations ─────────────────────────────────────────────
+  if (C.DEPT && colIdx[C.DEPT] !== undefined) {
+    const depts = [...new Set(allRows.map(r => gv(r, C.DEPT)).filter(v => v && v.trim()))];
+    const MIN_N = 10;
+    const parseScoreL = v => { const n = parseFloat((v||'').toString().replace(/[^\d.-]/g,'')); return isNaN(n) ? null : n; };
+
+    // Per-dept metric computation
+    const deptMetrics = depts.map(dept => {
+      const dr = allRows.filter(r => gv(r, C.DEPT) === dept);
+      if (dr.length < MIN_N) return null;
+      // eNPS
+      let dpro=0,ddet=0,dnT=0;
+      dr.forEach(r => { const v=parseScore(gv(r,C.ENPS)); if(v===null)return; dnT++; if(v>=9)dpro++; else if(v<7)ddet++; });
+      const dNps = dnT >= MIN_N ? Math.round((dpro/dnT - ddet/dnT)*100) : null;
+      // Satisfaction
+      const dSatVals = dr.map(r=>parseScoreL(gv(r,C.SAT))).filter(v=>v!==null);
+      const dSat = dSatVals.length >= MIN_N ? dSatVals.reduce((s,v)=>s+v,0)/dSatVals.length : null;
+      // WVP composite
+      const dWvpAvgs = (C.WVP||[]).map(col=>likertDist(dr,col).avg).filter(v=>v!==null);
+      const dWvp = dWvpAvgs.length ? Math.round((dWvpAvgs.reduce((s,v)=>s+v,0)/dWvpAvgs.length - 1)/3*100) : null;
+      return { dept, n: dr.length, nps: dNps, sat: dSat, wvp: dWvp };
+    }).filter(Boolean);
+
+    if (deptMetrics.length >= 2) {
+      // Overall metrics for comparison
+      const overallNps  = nps;
+      const overallSat  = satAvg !== null ? parseFloat(satAvg) : null;
+      const overallWvp  = wvpComp;
+
+      // Score each dept by max absolute deviation across available metrics
+      const scored = deptMetrics.map(d => {
+        let maxDev = 0, devDesc = '', devDir = '';
+        if (d.nps !== null && overallNps !== null) {
+          const dev = d.nps - overallNps;
+          if (Math.abs(dev) > Math.abs(maxDev)) { maxDev = dev; devDesc = `eNPS ${d.nps >= 0 ? '+' : ''}${d.nps} vs. avg ${overallNps >= 0 ? '+' : ''}${overallNps}`; devDir = dev > 0 ? 'above' : 'below'; }
+        }
+        if (d.sat !== null && overallSat !== null) {
+          const dev = (d.sat - overallSat) * 10; // scale to ~NPS range for comparison
+          if (Math.abs(dev) > Math.abs(maxDev)) { maxDev = dev; devDesc = `satisfaction avg ${d.sat.toFixed(1)}/10 vs. avg ${overallSat.toFixed(1)}`; devDir = dev > 0 ? 'above' : 'below'; }
+        }
+        if (d.wvp !== null && overallWvp !== null) {
+          const dev = d.wvp - overallWvp;
+          if (Math.abs(dev) > Math.abs(maxDev)) { maxDev = dev; devDesc = `WVP score ${d.wvp}/100 vs. avg ${overallWvp}`; devDir = dev > 0 ? 'above' : 'below'; }
+        }
+        return { ...d, maxDev, devDesc, devDir };
+      }).filter(d => Math.abs(d.maxDev) >= 8); // only meaningful outliers
+
+      if (scored.length > 0) {
+        scored.sort((a, b) => Math.abs(b.maxDev) - Math.abs(a.maxDev));
+        const top = scored.slice(0, 3);
+        const deptIns = top.map(d => {
+          const icon = d.maxDev > 0 ? '📈' : '📉';
+          const dir = d.maxDev > 0 ? 'above' : 'below';
+          const abs = Math.round(Math.abs(d.maxDev));
+          return { icon, text: `<strong>${esc(d.dept)}</strong> (N=${d.n}) scores notably <strong>${dir} average</strong> — ${d.devDesc}. This ${d.maxDev > 0 ? 'high-performing department represents a model to emulate.' : 'gap warrants targeted follow-up or additional support.'}` };
+        });
+        html += insightCard('📊', 'Departmental Differences', deptIns);
+      }
+    }
+  }
+
   document.getElementById('execSummaryContent').innerHTML = html;
 }
 
@@ -2463,7 +2524,6 @@ function renderSpace() {
         ${hBar('Dynamic (coffee-shop energy)', vibeDyn, '#17E88F')}
         ${hBar('Quiet (library focus)', vibeQui, '#80BBAD')}
       </div>
-      <p style="font-size:0.74rem;color:var(--text-muted);margin-top:0.75rem;line-height:1.6">Respondents split 100% between their preferred dynamic vs. quiet work environments.</p>
     </div>`;
   }
 
@@ -3300,26 +3360,6 @@ function quadrantSVG(dims, orgDims) {
   g += `<line x1="${cx}" y1="${cy-R}" x2="${cx}" y2="${cy+R}" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`;
   g += `<line x1="${cx-R}" y1="${cy}" x2="${cx+R}" y2="${cy}" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`;
 
-  // Org-average reference outline (dashed) when a filter is active
-  if (orgDims) {
-    const orgQuadDefs = [
-      { dim: orgDims[0], start: 0   },
-      { dim: orgDims[3], start: 90  },
-      { dim: orgDims[2], start: 180 },
-      { dim: orgDims[1], start: 270 },
-    ];
-    // Draw dashed arcs for each quadrant boundary
-    orgQuadDefs.forEach(({ dim, start }) => {
-      const score = Math.min(Math.max((dim.score || 0) / 100, 0.05), 1.0);
-      const r = R * score;
-      const x1 = cx + r * Math.cos(toRad(start));
-      const y1 = cy + r * Math.sin(toRad(start));
-      const x2 = cx + r * Math.cos(toRad(start + 90));
-      const y2 = cy + r * Math.sin(toRad(start + 90));
-      g += `<path d="M${cx},${cy} L${x1.toFixed(1)},${y1.toFixed(1)} A${r.toFixed(1)},${r.toFixed(1)} 0 0,1 ${x2.toFixed(1)},${y2.toFixed(1)} Z" fill="rgba(242,244,243,0.04)" stroke="rgba(242,244,243,0.30)" stroke-width="1.5" stroke-dasharray="5,4"/>`;
-    });
-  }
-
   // Quadrant fills
   quadDefs.forEach(({ dim, start, color }) => {
     const score = Math.min(Math.max((dim.score || 0) / 100, 0.05), 1.0);
@@ -3330,6 +3370,28 @@ function quadrantSVG(dims, orgDims) {
     const y2 = cy + r * Math.sin(toRad(start + 90));
     g += `<path d="M${cx},${cy} L${x1.toFixed(1)},${y1.toFixed(1)} A${r.toFixed(1)},${r.toFixed(1)} 0 0,1 ${x2.toFixed(1)},${y2.toFixed(1)} Z" fill="${color}" opacity="0.90"/>`;
   });
+
+  // Org-average reference — drawn ON TOP of fills as stroke-only dashed arcs
+  if (orgDims) {
+    const orgQuadDefs = [
+      { dim: orgDims[0], start: 0   },
+      { dim: orgDims[3], start: 90  },
+      { dim: orgDims[2], start: 180 },
+      { dim: orgDims[1], start: 270 },
+    ];
+    orgQuadDefs.forEach(({ dim, start }) => {
+      const score = Math.min(Math.max((dim.score || 0) / 100, 0.05), 1.0);
+      const r = R * score;
+      const x1 = cx + r * Math.cos(toRad(start));
+      const y1 = cy + r * Math.sin(toRad(start));
+      const x2 = cx + r * Math.cos(toRad(start + 90));
+      const y2 = cy + r * Math.sin(toRad(start + 90));
+      // Spoke lines from center to arc endpoints
+      g += `<line x1="${cx}" y1="${cy}" x2="${x1.toFixed(1)}" y2="${y1.toFixed(1)}" stroke="rgba(242,244,243,0.55)" stroke-width="1.5" stroke-dasharray="4,3"/>`;
+      // Dashed arc along the quadrant boundary
+      g += `<path d="M${x1.toFixed(1)},${y1.toFixed(1)} A${r.toFixed(1)},${r.toFixed(1)} 0 0,1 ${x2.toFixed(1)},${y2.toFixed(1)}" fill="none" stroke="rgba(242,244,243,0.65)" stroke-width="2" stroke-dasharray="5,4"/>`;
+    });
+  }
 
   // Center dot
   g += `<circle cx="${cx}" cy="${cy}" r="3.5" fill="rgba(242,244,243,0.25)"/>`;
@@ -3407,7 +3469,7 @@ function renderAttendance() {
 
   sortedDims.forEach(({icon,name,score,items}) => {
     const w = Math.round(score);
-    const bc = score>60?'#17E88F':score>35?'#80BBAD':'#D2785A';
+    const bc = '#17E88F';
     html += `<div class="driver-card"><div class="driver-icon">${icon}</div><div class="driver-name">${name}</div>
       <div class="driver-score">${w}%</div>
       <div class="driver-bar"><div class="driver-bar-fill" style="width:${w}%;background:${bc}"></div></div>
@@ -4232,8 +4294,8 @@ function renderSentiment() {
       const wPct = dispV !== null ? dispV : 0;
       const dispStr = dispV !== null ? dispV + '%' : (isLowN ? 'n<5' : '—');
       return `<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.3rem">
-        <span style="font-size:0.67rem;color:${t.color};min-width:70px;font-weight:500">${t.label} <span style="color:var(--text-muted);font-weight:400">(${t.n})</span></span>
-        <div style="width:160px;flex-shrink:0;height:14px;background:var(--track-bg-sm);border-radius:3px;overflow:hidden">
+        <span style="font-size:0.67rem;color:${t.color};min-width:95px;font-weight:500">${t.label} <span style="color:var(--text-muted);font-weight:400">(${t.n})</span></span>
+        <div style="width:220px;flex-shrink:0;height:14px;background:var(--track-bg-sm);border-radius:3px;overflow:hidden">
           <div style="width:${wPct}%;height:100%;background:${t.color}30;border-right:2px solid ${t.color}"></div>
         </div>
         <span style="font-size:0.75rem;font-weight:700;color:${t.color};min-width:36px;text-align:right">${dispStr}</span>
