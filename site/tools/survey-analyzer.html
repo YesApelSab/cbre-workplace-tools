@@ -2225,10 +2225,10 @@ function renderExecSummary() {
   };
 
   // ── Space, Design & Function ───────────────────────────────────────────
-  const supplyItems = C.SSUPPLY.map((col,i) => { const d=supplyDist(rows,col); return {label:C.SSUPPLY_L[i], nonePct:d.t?pct(d.n,d.t):0, tooLittlePct:d.t?pct(d.l,d.t):0, insuffPct:d.t?pct(d.n+d.l,d.t):0, rightPct:d.t?pct(d.r,d.t):0}; });
+  const supplyItems = C.SSUPPLY.map((col,i) => { const d=supplyDist(rows,col); return {label:qLabel(col, C.SSUPPLY_L[i]), nonePct:d.t?pct(d.n,d.t):0, tooLittlePct:d.t?pct(d.l,d.t):0, insuffPct:d.t?pct(d.n+d.l,d.t):0, rightPct:d.t?pct(d.r,d.t):0}; });
   const worstSupply = [...supplyItems].sort((a,b)=>b.insuffPct-a.insuffPct)[0];
   const bestSupply  = [...supplyItems].sort((a,b)=>b.rightPct-a.rightPct)[0];
-  const funcItems   = C.SFUNC.map((col,i)=>({label:C.SFUNC_L[i],...likertDist(rows,col)})).filter(d=>d.avg!==null);
+  const funcItems   = C.SFUNC.map((col,i)=>({label:qLabel(col, C.SFUNC_L[i]),...likertDist(rows,col)})).filter(d=>d.avg!==null);
   const lowestFunc  = funcItems.length ? [...funcItems].sort((a,b)=>(a.avg||0)-(b.avg||0))[0] : null;
   const highestFunc = funcItems.length ? [...funcItems].sort((a,b)=>(b.avg||0)-(a.avg||0))[0] : null;
   const vibeQ = avg(numVals(rows,'VIBE.QUIET'))||0;
@@ -2248,10 +2248,10 @@ function renderExecSummary() {
   const timeWithOthers = Math.round(avg(numVals(rows,C.TIME_O))||0);
   const scheduledPct   = Math.round(avg(numVals(rows,C.COL_S))||0);
   const unscheduledPct = Math.round(avg(numVals(rows,C.COL_U))||0);
-  const relItems  = C.REL.map((col,i)=>({label:C.REL_L[i],...likertDist(rows,col)})).filter(d=>d.avg!==null);
+  const relItems  = C.REL.map((col,i)=>({label:qLabel(col, C.REL_L[i]),...likertDist(rows,col)})).filter(d=>d.avg!==null);
   const lowestRel  = relItems.length ? [...relItems].sort((a,b)=>toNum(a.avg)-toNum(b.avg))[0] : null;
   const highestRel = relItems.length ? [...relItems].sort((a,b)=>toNum(b.avg)-toNum(a.avg))[0] : null;
-  const learnItems = C.LEARN.map((col,i)=>({label:C.LEARN_L[i],...likertDist(rows,col)})).filter(d=>d.avg!==null);
+  const learnItems = C.LEARN.map((col,i)=>({label:qLabel(col, C.LEARN_L[i]),...likertDist(rows,col)})).filter(d=>d.avg!==null);
   const topLearn   = learnItems.length ? [...learnItems].sort((a,b)=>toNum(b.avg)-toNum(a.avg))[0] : null;
   const relIns = [];
   if (timeWithOthers > 0) { const collab = timeWithOthers>=60?'highly collaborative':timeWithOthers>=40?'balanced':'individually oriented'; relIns.push({ icon:'🤝', text:`Employees spend <strong>${timeWithOthers}% of work time with others</strong>, characterizing the workforce as <strong>${collab}</strong>. ${unscheduledPct>40?`${unscheduledPct}% of that time is unscheduled — spontaneous interaction is a key feature of the workplace.`:`Most collaboration (${scheduledPct}%) is planned and scheduled.`}` }); }
@@ -2285,8 +2285,8 @@ function renderExecSummary() {
   const officePct = locEnts.filter(e=>e.canon&&(e.canon.key==='mostly office'||e.canon.key==='fully office')).reduce((s,e)=>s+tilePct2(e),0);
   const remotePct = locEnts.filter(e=>e.canon&&(e.canon.key==='fully remote'||e.canon.key==='mostly home')).reduce((s,e)=>s+tilePct2(e),0);
   const hybridPct = locEnts.filter(e=>e.canon&&e.canon.key==='equal mix').reduce((s,e)=>s+tilePct2(e),0);
-  const rb = C.RBEN.map((col,i)=>({label:C.RBEN_L[i],p:cbPct(rows,col)})).sort((a,b)=>b.p-a.p);
-  const ob = C.OBEN.map((col,i)=>({label:C.OBEN_L[i],p:cbPct(rows,col)})).sort((a,b)=>b.p-a.p);
+  const rb = C.RBEN.map((col,i)=>({label:qLabel(col, C.RBEN_L[i]),p:cbPct(rows,col)})).sort((a,b)=>b.p-a.p);
+  const ob = C.OBEN.map((col,i)=>({label:qLabel(col, C.OBEN_L[i]),p:cbPct(rows,col)})).sort((a,b)=>b.p-a.p);
   const futIns = [];
   if (locTotal > 0) { let locS=''; if(officePct>=50)locS=`<strong>${officePct}% prefer office-dominant arrangements</strong>, signaling continued demand for dedicated workspace.`; else if(remotePct>=50)locS=`<strong>${remotePct}% prefer remote-dominant arrangements</strong>, suggesting strong appetite for flexible/distributed work.`; else if(hybridPct>=35)locS=`<strong>Hybrid is the dominant preference at ${hybridPct}%</strong>, with office-leaning at ${officePct}% and remote-leaning at ${remotePct}%.`; else locS=`<strong>Work location preferences are split</strong> — office-leaning ${officePct}%, hybrid ${hybridPct}%, remote-leaning ${remotePct}%.`; futIns.push({ icon:'📍', text:locS }); }
   if (rb.length && rb[0].p>0) futIns.push({ icon:'🏠', text:`<strong>${rb[0].label} (${rb[0].p}%)</strong> is the top remote work benefit — hybrid policies should preserve this advantage.` });
@@ -2427,12 +2427,12 @@ function renderSpace() {
 
   // ── Key Takeaways ─────────────────────────────────────────────────────
   // Supply: find space type with highest combined "none + too little" %
-  const supplyItems = C.SSUPPLY.map((col,i) => { const d = supplyDist(rows,col); return {label:C.SSUPPLY_L[i], nonePct: d.t ? pct(d.n,d.t) : 0, tooLittlePct: d.t ? pct(d.l,d.t) : 0, insuffPct: d.t ? pct(d.n+d.l,d.t) : 0, rightPct: d.t ? pct(d.r,d.t) : 0}; });
+  const supplyItems = C.SSUPPLY.map((col,i) => { const d = supplyDist(rows,col); return {label:qLabel(col, C.SSUPPLY_L[i]), nonePct: d.t ? pct(d.n,d.t) : 0, tooLittlePct: d.t ? pct(d.l,d.t) : 0, insuffPct: d.t ? pct(d.n+d.l,d.t) : 0, rightPct: d.t ? pct(d.r,d.t) : 0}; });
   const worstSupply = [...supplyItems].sort((a,b) => b.insuffPct - a.insuffPct)[0];
   const bestSupply  = [...supplyItems].sort((a,b) => b.rightPct - a.rightPct)[0];
 
   // Functionality: lowest and highest rated
-  const funcItems = C.SFUNC.map((col,i) => ({label:C.SFUNC_L[i], ...likertDist(rows,col)})).filter(d => d.avg !== null);
+  const funcItems = C.SFUNC.map((col,i) => ({label:qLabel(col, C.SFUNC_L[i]), ...likertDist(rows,col)})).filter(d => d.avg !== null);
   const lowestFunc  = funcItems.length ? [...funcItems].sort((a,b) => (a.avg||0)-(b.avg||0))[0] : null;
   const highestFunc = funcItems.length ? [...funcItems].sort((a,b) => (b.avg||0)-(a.avg||0))[0] : null;
 
@@ -2473,7 +2473,7 @@ function renderSpace() {
   }
 
   // Supply
-  const supplyChartItems = C.SSUPPLY.map((col,i) => ({label:C.SSUPPLY_L[i],...supplyDist(rows,col)}))
+  const supplyChartItems = C.SSUPPLY.map((col,i) => ({label:qLabel(col, C.SSUPPLY_L[i]),...supplyDist(rows,col)}))
     .sort((a,b) => (b.t ? b.r/b.t : 0) - (a.t ? a.r/a.t : 0));
   window._lastSupplyData = supplyChartItems;
   html += `<div class="chart-card">
@@ -2492,7 +2492,7 @@ function renderSpace() {
 
   // Functionality
   const isFiltered = filteredRows.length < allRows.length;
-  const fd = C.SFUNC.map((col,i) => ({label:C.SFUNC_L[i],...likertDist(rows,col),orgAvg:isFiltered?likertDist(allRows,col).avg:null})).sort((a,b)=>(b.avg||0)-(a.avg||0));
+  const fd = C.SFUNC.map((col,i) => ({label:qLabel(col, C.SFUNC_L[i]),...likertDist(rows,col),orgAvg:isFiltered?likertDist(allRows,col).avg:null})).sort((a,b)=>(b.avg||0)-(a.avg||0));
   window._lastFuncData = fd;
   html += `<div class="chart-card">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem">
@@ -2504,7 +2504,7 @@ function renderSpace() {
   html += `</div>${likertLegend()}</div>`;
 
   // Design
-  const dd = C.SDES.map((col,i) => ({label:C.SDES_L[i],...likertDist(rows,col),orgAvg:isFiltered?likertDist(allRows,col).avg:null})).sort((a,b)=>(b.avg||0)-(a.avg||0));
+  const dd = C.SDES.map((col,i) => ({label:qLabel(col, C.SDES_L[i]),...likertDist(rows,col),orgAvg:isFiltered?likertDist(allRows,col).avg:null})).sort((a,b)=>(b.avg||0)-(a.avg||0));
   window._lastDesignData = dd;
   html += `<div class="chart-card">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem">
@@ -2528,7 +2528,7 @@ function renderSpace() {
   }
 
   // Noise Distraction Sources (Q20 — multi-select checkboxes)
-  const noiseData = C.Q20.map((col,i) => ({ label:C.Q20_L[i], p:cbPct(rows,col) })).filter(d=>d.p>0)
+  const noiseData = C.Q20.map((col,i) => ({ label:qLabel(col, C.Q20_L[i]), p:cbPct(rows,col) })).filter(d=>d.p>0)
     .sort((a,b) => {
       const aOther = /^(other|n\/a)/i.test(a.label.trim());
       const bOther = /^(other|n\/a)/i.test(b.label.trim());
@@ -2619,15 +2619,15 @@ function renderRel() {
   const unscheduledPct = Math.round(avg(numVals(rows, C.COL_U)) || 0);
 
   // Weakest and strongest relationship dimension
-  const relItems  = C.REL.map((col,i) => ({label:C.REL_L[i], ...likertDist(rows,col)})).filter(d => d.avg !== null);
+  const relItems  = C.REL.map((col,i) => ({label:qLabel(col, C.REL_L[i]), ...likertDist(rows,col)})).filter(d => d.avg !== null);
   const lowestRel  = relItems.length ? [...relItems].sort((a,b) => toNum(a.avg)-toNum(b.avg))[0] : null;
   const highestRel = relItems.length ? [...relItems].sort((a,b) => toNum(b.avg)-toNum(a.avg))[0] : null;
 
   // Top learning and social opportunity
-  const learnItems = C.LEARN.map((col,i) => ({label:C.LEARN_L[i], ...likertDist(rows,col)})).filter(d => d.avg !== null);
+  const learnItems = C.LEARN.map((col,i) => ({label:qLabel(col, C.LEARN_L[i]), ...likertDist(rows,col)})).filter(d => d.avg !== null);
   const topLearn   = learnItems.length ? [...learnItems].sort((a,b) => toNum(b.avg)-toNum(a.avg))[0] : null;
 
-  const socItems   = C.SOC.map((col,i) => ({label:C.SOC_L[i], ...likertDist(rows,col)})).filter(d => d.avg !== null);
+  const socItems   = C.SOC.map((col,i) => ({label:qLabel(col, C.SOC_L[i]), ...likertDist(rows,col)})).filter(d => d.avg !== null);
   const topSocial  = socItems.length ? [...socItems].sort((a,b) => toNum(b.avg)-toNum(a.avg))[0] : null;
   const lowSocial  = socItems.length ? [...socItems].sort((a,b) => toNum(a.avg)-toNum(b.avg))[0] : null;
 
@@ -2658,21 +2658,21 @@ function renderRel() {
   const isFilteredR = filteredRows.length < allRows.length;
   const GRP_HDR = txt => `<div style="font-size:0.68rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-muted);padding:0.6rem 0 0.2rem;border-top:1px solid var(--card-border);margin-bottom:0.4rem">${txt}</div>`;
   html += GRP_HDR('Relationships');
-  const rd = C.REL.map((col,i) => ({label:C.REL_L[i],...likertDist(rows,col),orgAvg:isFilteredR?likertDist(allRows,col).avg:null})).sort((a,b)=>(b.avg||0)-(a.avg||0));
+  const rd = C.REL.map((col,i) => ({label:qLabel(col, C.REL_L[i]),...likertDist(rows,col),orgAvg:isFilteredR?likertDist(allRows,col).avg:null})).sort((a,b)=>(b.avg||0)-(a.avg||0));
   html += `<div class="chart-card"><div class="chart-card-title">Workplace Relationships <span>avg 1–4</span></div><div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem">How much do you agree with the following statements about your relationships at work?</div><div class="stacked-chart">`;
   rd.forEach(d => html += stackedBar(d.label, d.d, d.t, d.avg, null, d.orgAvg));
   html += `</div>${likertLegend()}</div>`;
 
   // Learning
   html += GRP_HDR('Learning');
-  const ld = C.LEARN.map((col,i) => ({label:C.LEARN_L[i],...likertDist(rows,col),orgAvg:isFilteredR?likertDist(allRows,col).avg:null})).sort((a,b)=>(b.avg||0)-(a.avg||0));
+  const ld = C.LEARN.map((col,i) => ({label:qLabel(col, C.LEARN_L[i]),...likertDist(rows,col),orgAvg:isFilteredR?likertDist(allRows,col).avg:null})).sort((a,b)=>(b.avg||0)-(a.avg||0));
   html += `<div class="chart-card"><div class="chart-card-title">In-Office Activity Importance <span>avg 1–4</span></div><div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem">How important is being physically in the office for each of the following activities?</div><div class="stacked-chart">`;
   ld.forEach(d => html += stackedBar(d.label, d.d, d.t, d.avg, null, d.orgAvg));
   html += `</div>${likertLegendImportance()}</div>`;
 
   // Social
   html += GRP_HDR('Social');
-  const sd = C.SOC.map((col,i) => ({label:C.SOC_L[i],...likertDist(rows,col),orgAvg:isFilteredR?likertDist(allRows,col).avg:null})).sort((a,b)=>(b.avg||0)-(a.avg||0));
+  const sd = C.SOC.map((col,i) => ({label:qLabel(col, C.SOC_L[i]),...likertDist(rows,col),orgAvg:isFilteredR?likertDist(allRows,col).avg:null})).sort((a,b)=>(b.avg||0)-(a.avg||0));
   html += `<div class="chart-card"><div class="chart-card-title">Social Opportunity Importance</div><div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem">How important are the following social activities to your overall in-office experience?</div><div class="stacked-chart">`;
   sd.forEach(d => html += stackedBar(d.label, d.d, d.t, d.avg, null, d.orgAvg));
   html += `</div>${likertLegendImportance()}</div>`;
@@ -2684,8 +2684,8 @@ function renderRel() {
     const d2={4:0,3:0,2:0,1:0}; let t=0;
     rows.forEach(r => { const v=parseHostFreq(gv(r,col)); if(v!==null){d2[v]++;t++;} });
     const a = t ? (4*d2[4]+3*d2[3]+2*d2[2]+1*d2[1])/t : null;
-    return {label:C.HOST_L[i], d:d2, t, avg:a};
-  }).sort((a,b)=>(b.avg||0)-(a.avg||0));
+    return {label:qLabel(col, C.HOST_L[i]), d:d2, t, avg:a};
+  }).filter(d => d.t > 0).sort((a,b)=>(b.avg||0)-(a.avg||0));
   html += `<div class="chart-card"><div class="chart-card-title">Hosting Frequency at Office</div><div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem">How frequently do you host each of the following groups in the office?</div><div class="stacked-chart">`;
   hd.forEach(d => html += stackedBar(d.label, d.d, d.t, d.avg));
   html += `</div><div class="chart-legend">${['Never','Quarterly/Rarely','Biweekly/Monthly','Daily/Weekly'].map((l,i)=>`<div class="legend-item"><div class="legend-dot" style="background:${hostColors[3-i]}"></div>${l}</div>`).join('')}</div></div>`;
@@ -2814,7 +2814,7 @@ function renderRel() {
 function renderWVP() {
   const rows = filteredRows;
   const isFilteredW = filteredRows.length < allRows.length;
-  const wvpD = C.WVP.map((col,i) => ({label:C.WVP_L[i],...likertDist(rows,col),orgAvg:isFilteredW?likertDist(allRows,col).avg:null}));
+  const wvpD = C.WVP.map((col,i) => ({label:qLabel(col, C.WVP_L[i]),...likertDist(rows,col),orgAvg:isFilteredW?likertDist(allRows,col).avg:null}));
   const avgs = wvpD.map(d => d.avg).filter(v => v !== null);
   const comp = avgs.length ? (avg(avgs)*25).toFixed(0) : '—';
   const sorted = [...wvpD].sort((a,b)=>(b.avg||0)-(a.avg||0));
@@ -2994,8 +2994,8 @@ function renderFuture() {
   // Helper: sum counts for labels matching any keyword (case-insensitive substring)
   const lcSum = (...keywords) => locEnts.filter(e => keywords.some(k => e.rawLabel.toLowerCase().includes(k))).reduce((s,e) => s+e.n, 0);
 
-  const rb = C.RBEN.map((col,i) => ({label:C.RBEN_L[i], p:cbPct(rows,col)})).sort((a,b)=>b.p-a.p);
-  const ob = C.OBEN.map((col,i) => ({label:C.OBEN_L[i], p:cbPct(rows,col)})).sort((a,b)=>b.p-a.p);
+  const rb = C.RBEN.map((col,i) => ({label:qLabel(col, C.RBEN_L[i]), p:cbPct(rows,col)})).sort((a,b)=>b.p-a.p);
+  const ob = C.OBEN.map((col,i) => ({label:qLabel(col, C.OBEN_L[i]), p:cbPct(rows,col)})).sort((a,b)=>b.p-a.p);
 
   // ── Top 3 Insights (algorithmic — no API) ─────────────────────────────
   // Summary stats are derived from the rounded tile percentages so they always
@@ -3118,7 +3118,7 @@ function renderFuture() {
   </div>`;
 
   // ── Trade-offs ────────────────────────────────────────────────────────
-  const td = C.TRADE.map((col,i) => ({label:C.TRADE_L[i],...likertDist(rows,col)}))
+  const td = C.TRADE.map((col,i) => ({label:qLabel(col, C.TRADE_L[i]),...likertDist(rows,col)}))
     .filter(d => d.t > 0)
     .sort((a,b)=>(b.avg||0)-(a.avg||0));
 
@@ -3182,7 +3182,7 @@ function renderFuture() {
       else return; // unrecognized response — exclude from total
       tot++;
     });
-    return {label:C.AMM_L[i],off,bld,nbr,not,tot};
+    return {label:qLabel(col, C.AMM_L[i]),off,bld,nbr,not,tot};
   }).sort((a,b) => (b.off/Math.max(b.tot,1)) - (a.off/Math.max(a.tot,1)));
 
   html += `<div class="chart-card"><div class="chart-card-title">Amenity Location Importance</div><div class="stacked-chart amm-chart">`;
@@ -4207,11 +4207,11 @@ function renderSentiment() {
   if (hasTiers) {
     const slopeLevels = [
       { name:'Physical Environment', color:'#538184',
-        items: C.SFUNC.map((c,i)=>({col:c,lbl:C.SFUNC_L[i]})).concat(C.SDES.map((c,i)=>({col:c,lbl:C.SDES_L[i]}))) },
+        items: C.SFUNC.map((c,i)=>({col:c,lbl:qLabel(c, C.SFUNC_L[i])})).concat(C.SDES.map((c,i)=>({col:c,lbl:qLabel(c, C.SDES_L[i])}))) },
       { name:'Connections', color:'#80BBAD',
-        items: C.REL.map((c,i)=>({col:c,lbl:C.REL_L[i]})).concat(C.LEARN.map((c,i)=>({col:c,lbl:C.LEARN_L[i]})), C.SOC.map((c,i)=>({col:c,lbl:C.SOC_L[i]}))) },
+        items: C.REL.map((c,i)=>({col:c,lbl:qLabel(c, C.REL_L[i])})).concat(C.LEARN.map((c,i)=>({col:c,lbl:qLabel(c, C.LEARN_L[i])})), C.SOC.map((c,i)=>({col:c,lbl:qLabel(c, C.SOC_L[i])}))) },
       { name:'Belonging & Values', color:'#C0D4CB',
-        items: C.WVP.map((c,i)=>({col:c,lbl:C.WVP_L[i]})) },
+        items: C.WVP.map((c,i)=>({col:c,lbl:qLabel(c, C.WVP_L[i])})) },
     ];
     const slopesByLevel = slopeLevels.map(lvl => ({
       ...lvl,
@@ -4419,25 +4419,25 @@ function exportPDFReport() {
   const locEnts=Object.entries(lc).filter(([,v])=>v>0).map(([raw,v],i)=>{const c=locCanon.find(x=>x.key===raw.toLowerCase().trim());return{label:c?c.label:raw,n:v,color:c?c.color:'#538184'};}).sort((a,b)=>{const ai=locCanon.findIndex(x=>x.key===a.label.toLowerCase().trim()),bi=locCanon.findIndex(x=>x.key===b.label.toLowerCase().trim());return(ai===-1?99:ai)-(bi===-1?99:bi);});
 
   // Benefits
-  const rb=C.RBEN.map((col,i)=>({label:C.RBEN_L[i],p:cbPct(rows,col)})).sort((a,b)=>b.p-a.p).slice(0,6);
-  const ob=C.OBEN.map((col,i)=>({label:C.OBEN_L[i],p:cbPct(rows,col)})).sort((a,b)=>b.p-a.p).slice(0,6);
+  const rb=C.RBEN.map((col,i)=>({label:qLabel(col, C.RBEN_L[i]),p:cbPct(rows,col)})).sort((a,b)=>b.p-a.p).slice(0,6);
+  const ob=C.OBEN.map((col,i)=>({label:qLabel(col, C.OBEN_L[i]),p:cbPct(rows,col)})).sort((a,b)=>b.p-a.p).slice(0,6);
 
   // WVP
-  const wvpItems=C.WVP.map((col,i)=>({label:C.WVP_L[i],...likertDist(rows,col)})).filter(d=>d.avg!==null);
+  const wvpItems=C.WVP.map((col,i)=>({label:qLabel(col, C.WVP_L[i]),...likertDist(rows,col)})).filter(d=>d.avg!==null);
   const wvpComposite=wvpItems.length?Math.round(wvpItems.reduce((s,d)=>s+(d.avg||0),0)/wvpItems.length/4*100):null;
   const lowestWVP=wvpItems.length?[...wvpItems].sort((a,b)=>(a.avg||0)-(b.avg||0))[0]:null;
   const highestWVP=wvpItems.length?[...wvpItems].sort((a,b)=>(b.avg||0)-(a.avg||0))[0]:null;
 
   // Space
-  const funcItems=C.SFUNC.map((col,i)=>({label:C.SFUNC_L[i],...likertDist(rows,col)})).filter(d=>d.avg!==null).sort((a,b)=>(a.avg||0)-(b.avg||0));
-  const supplyItems=C.SSUPPLY.map((col,i)=>{const d=supplyDist(rows,col);return{label:C.SSUPPLY_L[i],nonePct:d.t?pct(d.n,d.t):0,tooLittlePct:d.t?pct(d.l,d.t):0,insuffPct:d.t?pct(d.n+d.l,d.t):0};}).sort((a,b)=>b.insuffPct-a.insuffPct);
+  const funcItems=C.SFUNC.map((col,i)=>({label:qLabel(col, C.SFUNC_L[i]),...likertDist(rows,col)})).filter(d=>d.avg!==null).sort((a,b)=>(a.avg||0)-(b.avg||0));
+  const supplyItems=C.SSUPPLY.map((col,i)=>{const d=supplyDist(rows,col);return{label:qLabel(col, C.SSUPPLY_L[i]),nonePct:d.t?pct(d.n,d.t):0,tooLittlePct:d.t?pct(d.l,d.t):0,insuffPct:d.t?pct(d.n+d.l,d.t):0};}).sort((a,b)=>b.insuffPct-a.insuffPct);
 
   // REL
-  const relItems=C.REL.map((col,i)=>({label:C.REL_L[i],...likertDist(rows,col)})).filter(d=>d.avg!==null).sort((a,b)=>(b.avg||0)-(a.avg||0));
-  const learnItems=C.LEARN.map((col,i)=>({label:C.LEARN_L[i],...likertDist(rows,col)})).filter(d=>d.avg!==null).sort((a,b)=>(b.avg||0)-(a.avg||0));
+  const relItems=C.REL.map((col,i)=>({label:qLabel(col, C.REL_L[i]),...likertDist(rows,col)})).filter(d=>d.avg!==null).sort((a,b)=>(b.avg||0)-(a.avg||0));
+  const learnItems=C.LEARN.map((col,i)=>({label:qLabel(col, C.LEARN_L[i]),...likertDist(rows,col)})).filter(d=>d.avg!==null).sort((a,b)=>(b.avg||0)-(a.avg||0));
 
   // Trade-offs
-  const tradeItems=C.TRADE.map((col,i)=>({label:C.TRADE_L[i],...likertDist(rows,col)})).sort((a,b)=>(b.avg||0)-(a.avg||0));
+  const tradeItems=C.TRADE.map((col,i)=>({label:qLabel(col, C.TRADE_L[i]),...likertDist(rows,col)})).sort((a,b)=>(b.avg||0)-(a.avg||0));
 
   // Verbatims
   const posV=rows.map(r=>({text:gv(r,C.Q42),dept:gv(r,C.DEPT)})).filter(v=>v.text&&v.text.length>10).slice(0,12);
@@ -4449,15 +4449,15 @@ function exportPDFReport() {
   const scalesSVGStr = personalityScalesSVG([...scalesData].reverse());
 
   // ── Additional module data (not computed above) ──────────────────────
-  const desItems  = C.SDES.map((col,i)=>({label:C.SDES_L[i],...likertDist(rows,col)})).filter(d=>d.avg!==null).sort((a,b)=>(b.avg||0)-(a.avg||0));
-  const vibeItems = C.VIBE.map((col,i)=>({label:C.VIBE_L[i],...likertDist(rows,col)})).filter(d=>d.avg!==null);
-  const socItems  = C.SOC.map((col,i)=>({label:C.SOC_L[i],...likertDist(rows,col)})).filter(d=>d.avg!==null).sort((a,b)=>(b.avg||0)-(a.avg||0));
-  const hostItems = C.HOST.map((col,i)=>({label:C.HOST_L[i],...likertDist(rows,col)})).filter(d=>d.avg!==null).sort((a,b)=>(b.avg||0)-(a.avg||0));
-  const supplyFull= C.SSUPPLY.map((col,i)=>{const d=supplyDist(rows,col);return{label:C.SSUPPLY_L[i],right:d.t?pct(d.r,d.t):0,little:d.t?pct(d.l,d.t):0,much:d.t?pct(d.m,d.t):0,none:d.t?pct(d.n,d.t):0,t:d.t};}).filter(d=>d.t>0).sort((a,b)=>b.little-a.little);
+  const desItems  = C.SDES.map((col,i)=>({label:qLabel(col, C.SDES_L[i]),...likertDist(rows,col)})).filter(d=>d.avg!==null).sort((a,b)=>(b.avg||0)-(a.avg||0));
+  const vibeItems = C.VIBE.map((col,i)=>({label:qLabel(col, C.VIBE_L[i]),...likertDist(rows,col)})).filter(d=>d.avg!==null);
+  const socItems  = C.SOC.map((col,i)=>({label:qLabel(col, C.SOC_L[i]),...likertDist(rows,col)})).filter(d=>d.avg!==null).sort((a,b)=>(b.avg||0)-(a.avg||0));
+  const hostItems = C.HOST.map((col,i)=>({label:qLabel(col, C.HOST_L[i]),...likertDist(rows,col)})).filter(d=>d.avg!==null).sort((a,b)=>(b.avg||0)-(a.avg||0));
+  const supplyFull= C.SSUPPLY.map((col,i)=>{const d=supplyDist(rows,col);return{label:qLabel(col, C.SSUPPLY_L[i]),right:d.t?pct(d.r,d.t):0,little:d.t?pct(d.l,d.t):0,much:d.t?pct(d.m,d.t):0,none:d.t?pct(d.n,d.t):0,t:d.t};}).filter(d=>d.t>0).sort((a,b)=>b.little-a.little);
   const ammPDF = C.AMM.map((col,i)=>{
     let off=0,bld=0,nbr=0,not=0,tot=0;
     rows.forEach(r=>{const v=gv(r,col).toLowerCase();if(!v)return;if(v.includes('office space')||v.includes('within the office'))off++;else if(v.includes('within the building')||v.includes('within the site'))bld++;else if(v.includes('neighborhood')||v.includes('surrounding'))nbr++;else if(v.includes('not important'))not++;else return;tot++;});
-    return{label:C.AMM_L[i],off,bld,nbr,not,tot};
+    return{label:qLabel(col, C.AMM_L[i]),off,bld,nbr,not,tot};
   }).filter(d=>d.tot>0).sort((a,b)=>(b.off/Math.max(b.tot,1))-(a.off/Math.max(a.tot,1)));
   // Location bucket pcts for future page (raw label matching)
   const matchLoc = (label,...kw) => kw.some(k=>label.toLowerCase().includes(k));
@@ -4468,7 +4468,7 @@ function exportPDFReport() {
   // ── Report HTML helpers ──────────────────────────────────────────────
   // Full-width Likert bar — readable at print scale
   function lBar(label,d,t,a){
-    if(!t)return`<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px"><span style="font-size:11px;color:#7A9590;min-width:195px;flex-shrink:0">${esc(label)}</span><span style="font-size:10px;color:#aaa">No data</span></div>`;
+    if(!t)return'';
     const colors=['#8B1A1A','#D2785A','#17E88F','#003F2D'];
     const segs=[1,2,3,4].map((s,i)=>{const w=t?pct(d[s]||0,t):0;if(!w)return'';const lbl=w>=6?`<span style="font-size:9px;font-weight:700;color:${i===0||i===3?'rgba(255,255,255,0.9)':'rgba(0,0,0,0.72)'}">${w}%</span>`:'';return`<div style="width:${w}%;background:${colors[i]};height:100%;display:flex;align-items:center;justify-content:center;flex-shrink:0">${lbl}</div>`;}).join('');
     return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px">
