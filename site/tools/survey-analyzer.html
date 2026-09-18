@@ -4305,8 +4305,9 @@ function renderSentiment() {
   window._lastPyrTierN = { pro: tierRows.pro.length, pas: tierRows.pas.length, det: tierRows.det.length };
 
   // ── Engagement Slope chart ────────────────────────────────────────────
+  // Only show when tiers come from real eNPS/SAT data, not synthetic k-means clusters
   const hasTiers = tierRows.pro.length > 0 || tierRows.pas.length > 0 || tierRows.det.length > 0;
-  if (hasTiers) {
+  if (hasTiers && clsMethod === 'direct') {
     const slopeLevels = [
       { name:'Physical Environment', color:'#538184',
         items: C.SFUNC.map((c,i)=>({col:c,lbl:qLabel(c, C.SFUNC_L[i])})).concat(C.SDES.map((c,i)=>({col:c,lbl:qLabel(c, C.SDES_L[i])}))) },
