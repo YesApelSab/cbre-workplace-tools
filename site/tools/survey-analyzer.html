@@ -995,6 +995,7 @@ const C = {
   Q20_L:['Socializing nearby','Calls/meetings nearby','Devices/equipment/HVAC','Outside noise','Other','N/A — no noise distractions'],
   LUNFREQ:'LUNFREQ', LUNLOCAL:'LUNLOCAL', TECHNEED:'TECHNEED',
   Q26:'SPECREQ.A1', Q31:'MGRFREQ', Q32:'COLLABVBM.A1', Q34:'HALLREC', Q51:'FINALVBM.A1',
+  Q13: [], // cross-team collaborators — multi-select columns detected at parse time
 };
 
 const LIKERT_MAP = {
@@ -1304,6 +1305,31 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
       qt.includes('travel to the office') || qt.includes('travel to work')
     )) { C.Q15 = code.trim(); commuteModeFound = true; }
   });
+
+  // Q26: specialty space verbatim — detect by question text
+  let q26Found = !!C.Q26 && C.Q26 !== 'SPECREQ.A1';
+  if (!q26Found) {
+    codes.forEach((code, i) => {
+      if (q26Found || !code || !code.trim()) return;
+      const qt = (qTexts[i] || '').toLowerCase();
+      if (qt.includes('specialty space') || qt.includes('special space') || qt.includes('specialty requirement') || qt.includes('specialized space')) {
+        C.Q26 = code.trim(); q26Found = true;
+      }
+    });
+  }
+
+  // Q13: cross-team collaborators — collect ALL columns whose question text matches
+  const q13Detected = [];
+  codes.forEach((code, i) => {
+    if (!code || !code.trim()) return;
+    const qt = (qTexts[i] || '').toLowerCase();
+    if (
+      (qt.includes('which') && (qt.includes('business unit') || qt.includes('department') || qt.includes('team')) && (qt.includes('work with') || qt.includes('collaborate') || qt.includes('most frequently'))) ||
+      (qt.includes('cross-team') || qt.includes('cross team')) ||
+      (qt.includes('top') && qt.includes('collaborat') && (qt.includes('department') || qt.includes('team') || qt.includes('unit')))
+    ) { q13Detected.push(code.trim()); }
+  });
+  if (q13Detected.length) C.Q13 = q13Detected;
 
   // Collect any additional categorical columns not already claimed by ANY known C column
   extraDemoColumns = [];
@@ -2623,6 +2649,43 @@ function renderRel() {
     <div class="h-bar-chart">${hBar('Small (2–5 people)',ms)}${hBar('Medium (6–10 people)',mm)}${hBar('Large (11–16 people)',ml)}</div>
   </div>`;
 
+  // Cross-Team Collaboration (Q13) — multi-select: aggregate all columns
+  if (C.Q13 && C.Q13.length > 0) {
+    const ctCounts = {};
+    rows.forEach(r => {
+      C.Q13.forEach(col => {
+        const v = gv(r, col);
+        if (v && v.trim()) {
+          const k = v.trim();
+          ctCounts[k] = (ctCounts[k] || 0) + 1;
+        }
+      });
+    });
+    const ctEntries = Object.entries(ctCounts);
+    if (ctEntries.length > 0) {
+      const ctTotal = rows.length;
+      const ctSorted = ctEntries.sort((a, b) => {
+        const aOther = /^(n\/a|i do not|none|other)/i.test(a[0].trim());
+        const bOther = /^(n\/a|i do not|none|other)/i.test(b[0].trim());
+        if (aOther !== bOther) return aOther ? 1 : -1;
+        return b[1] - a[1];
+      });
+      html += GRP_HDR('Cross-Team Collaboration');
+      const PAL_CT = ['#17E88F','#0FB870','#80BBAD','#538184','#DBD99A','#D2785A','#8B1A1A'];
+      const ctBars = ctSorted.map(([v, n], i) => {
+        const w = pct(n, ctTotal);
+        return `<div class="h-bar-row" style="margin-bottom:0.35rem">
+          <span style="font-size:0.74rem;color:var(--text);width:200px;min-width:200px;max-width:200px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(v)}">${esc(v)}</span>
+          <div style="flex:1;min-width:80px;height:20px;background:var(--card-border);border-radius:4px;overflow:hidden;">
+            <div style="height:100%;width:${w}%;background:${PAL_CT[i % PAL_CT.length]};border-radius:4px;"></div>
+          </div>
+          <span style="font-size:0.72rem;color:var(--text-muted);min-width:65px;text-align:right">${n} (${w}%)</span>
+        </div>`;
+      }).join('');
+      html += `<div class="chart-card"><div class="chart-card-title">Top Collaborators by Division / Department <span>N=${ctTotal} respondents, up to ${C.Q13.length} selections each</span></div><div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem">Which other business units or departments do respondents work with most frequently?</div>${ctBars}</div>`;
+    }
+  }
+
   // 1:1 Meeting Frequency with Manager (Q31)
   const q31Counts = countBy(rows, C.Q31);
   if (Object.keys(q31Counts).length) {
@@ -3206,7 +3269,7 @@ function exportPersonalityScalesPNG() {
 }
 
 // ─── QUADRANT SVG ─────────────────────────────────────────────────────────────
-function quadrantSVG(dims) {
+function quadrantSVG(dims, orgDims) {
   // dims order: [Functionality, Teamwork, Exposure, Experience]
   // Quadrant positions (clockwise from 12 o'clock):
   //   0–90°   → top-right   → Functionality
@@ -3236,6 +3299,26 @@ function quadrantSVG(dims) {
   // Axis lines
   g += `<line x1="${cx}" y1="${cy-R}" x2="${cx}" y2="${cy+R}" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`;
   g += `<line x1="${cx-R}" y1="${cy}" x2="${cx+R}" y2="${cy}" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`;
+
+  // Org-average reference outline (dashed) when a filter is active
+  if (orgDims) {
+    const orgQuadDefs = [
+      { dim: orgDims[0], start: 0   },
+      { dim: orgDims[3], start: 90  },
+      { dim: orgDims[2], start: 180 },
+      { dim: orgDims[1], start: 270 },
+    ];
+    // Draw dashed arcs for each quadrant boundary
+    orgQuadDefs.forEach(({ dim, start }) => {
+      const score = Math.min(Math.max((dim.score || 0) / 100, 0.05), 1.0);
+      const r = R * score;
+      const x1 = cx + r * Math.cos(toRad(start));
+      const y1 = cy + r * Math.sin(toRad(start));
+      const x2 = cx + r * Math.cos(toRad(start + 90));
+      const y2 = cy + r * Math.sin(toRad(start + 90));
+      g += `<path d="M${cx},${cy} L${x1.toFixed(1)},${y1.toFixed(1)} A${r.toFixed(1)},${r.toFixed(1)} 0 0,1 ${x2.toFixed(1)},${y2.toFixed(1)} Z" fill="rgba(242,244,243,0.04)" stroke="rgba(242,244,243,0.30)" stroke-width="1.5" stroke-dasharray="5,4"/>`;
+    });
+  }
 
   // Quadrant fills
   quadDefs.forEach(({ dim, start, color }) => {
@@ -3292,17 +3375,22 @@ function exportQuadrantPNG() {
 // ─── ATTENDANCE DRIVERS ───────────────────────────────────────────────────────
 function renderAttendance() {
   const rows = filteredRows;
-  const gp = col => cbPct(rows,col);
-  const dims = [
-    { icon:'⚙️', name:'Functionality', score: avg([gp('OPOTBEN.TECH'),gp('OPOTBEN.OCONFIG')])||0,
-      items:[{l:'Better technology',pct:gp('OPOTBEN.TECH')},{l:'Custom workspace setup',pct:gp('OPOTBEN.OCONFIG')}] },
-    { icon:'🤝', name:'Teamwork', score: avg([gp('OPOTBEN.COMMS'),gp('OPOTBEN.OCONNECT')])||0,
-      items:[{l:'Better communication',pct:gp('OPOTBEN.COMMS')},{l:'Office connections',pct:gp('OPOTBEN.OCONNECT')}] },
-    { icon:'👁️', name:'Exposure', score: avg([gp('OPOTBEN.LEADVIS'),gp('OPOTBEN.GATHER')])||0,
-      items:[{l:'Leadership visibility',pct:gp('OPOTBEN.LEADVIS')},{l:'Team gatherings',pct:gp('OPOTBEN.GATHER')}] },
-    { icon:'✨', name:'Experience', score: avg([gp('OPOTBEN.BWLB'),gp('OPOTBEN.OPRIVATE'),gp('OPOTBEN.ODISTRACT')])||0,
-      items:[{l:'Work-life separation',pct:gp('OPOTBEN.BWLB')},{l:'Private workspace',pct:gp('OPOTBEN.OPRIVATE')},{l:'Fewer distractions',pct:gp('OPOTBEN.ODISTRACT')}] },
-  ];
+  const isFilteredA = filteredRows.length < allRows.length;
+  const mkDims = r => {
+    const gp = col => cbPct(r, col);
+    return [
+      { icon:'⚙️', name:'Functionality', score: avg([gp('OPOTBEN.TECH'),gp('OPOTBEN.OCONFIG')])||0,
+        items:[{l:'Better technology',pct:gp('OPOTBEN.TECH')},{l:'Custom workspace setup',pct:gp('OPOTBEN.OCONFIG')}] },
+      { icon:'🤝', name:'Teamwork', score: avg([gp('OPOTBEN.COMMS'),gp('OPOTBEN.OCONNECT')])||0,
+        items:[{l:'Better communication',pct:gp('OPOTBEN.COMMS')},{l:'Office connections',pct:gp('OPOTBEN.OCONNECT')}] },
+      { icon:'👁️', name:'Exposure', score: avg([gp('OPOTBEN.LEADVIS'),gp('OPOTBEN.GATHER')])||0,
+        items:[{l:'Leadership visibility',pct:gp('OPOTBEN.LEADVIS')},{l:'Team gatherings',pct:gp('OPOTBEN.GATHER')}] },
+      { icon:'✨', name:'Experience', score: avg([gp('OPOTBEN.BWLB'),gp('OPOTBEN.OPRIVATE'),gp('OPOTBEN.ODISTRACT')])||0,
+        items:[{l:'Work-life separation',pct:gp('OPOTBEN.BWLB')},{l:'Private workspace',pct:gp('OPOTBEN.OPRIVATE')},{l:'Fewer distractions',pct:gp('OPOTBEN.ODISTRACT')}] },
+    ];
+  };
+  const dims = mkDims(rows);
+  const orgDims = isFilteredA ? mkDims(allRows) : null;
   const top = [...dims].sort((a,b)=>b.score-a.score)[0];
 
   if (!dims.some(d => d.score > 0)) {
@@ -3338,7 +3426,8 @@ function renderAttendance() {
       <button class="export-btn" onclick="exportQuadrantPNG()">↓ Export PNG</button>
     </div>
     <p class="quadrant-desc">Why do employees come to the office? Some have functional reasons like equipment access; others prioritize team exposure or experience. Understanding these drivers helps shape hybrid policy and workplace strategy.</p>
-    ${quadrantSVG(dims)}
+    ${quadrantSVG(dims, orgDims)}
+    ${orgDims ? `<div style="font-size:0.68rem;color:var(--text-muted);text-align:center;margin-top:0.3rem">Dashed outline = overall average (all respondents)</div>` : ''}
     <div class="quadrant-legend">${legend}</div>
   </div>`;
 
@@ -4144,7 +4233,7 @@ function renderSentiment() {
       const dispStr = dispV !== null ? dispV + '%' : (isLowN ? 'n<5' : '—');
       return `<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.3rem">
         <span style="font-size:0.67rem;color:${t.color};min-width:70px;font-weight:500">${t.label} <span style="color:var(--text-muted);font-weight:400">(${t.n})</span></span>
-        <div style="flex:1;height:14px;background:var(--track-bg-sm);border-radius:3px;overflow:hidden">
+        <div style="width:160px;flex-shrink:0;height:14px;background:var(--track-bg-sm);border-radius:3px;overflow:hidden">
           <div style="width:${wPct}%;height:100%;background:${t.color}30;border-right:2px solid ${t.color}"></div>
         </div>
         <span style="font-size:0.75rem;font-weight:700;color:${t.color};min-width:36px;text-align:right">${dispStr}</span>
@@ -4164,38 +4253,6 @@ function renderSentiment() {
     Levels with the largest gap are where workplace investment most influences whether someone becomes a promoter or detractor.
   </div>
   </div></div></div>`;
-
-  // ── Verbatims (Q26 specialty space) ──────────────────────────────────
-  const specVData = rows.map(r => ({ text: gv(r, C.Q26), dept: gv(r, C.DEPT) })).filter(v => v.text && v.text.length > 5);
-  if (specVData.length) {
-    const VLIMIT = 25;
-    const sentVerbBlock = (items, cls) => {
-      let h = `<div class="verbatim-list" style="margin-bottom:0.5rem">`;
-      items.slice(0, VLIMIT).forEach(v => {
-        h += `<div class="${cls}">"${esc(v.text)}"${v.dept ? `<span class="verbatim-dept">${esc(v.dept)}</span>` : ''}</div>`;
-      });
-      if (items.length > VLIMIT) {
-        h += `<div class="verbatim-overflow" style="display:none">`;
-        items.slice(VLIMIT).forEach(v => {
-          h += `<div class="${cls}">"${esc(v.text)}"${v.dept ? `<span class="verbatim-dept">${esc(v.dept)}</span>` : ''}</div>`;
-        });
-        h += `</div><button class="verbatim-more-btn" onclick="this.previousElementSibling.style.display='block';this.style.display='none'">Show ${items.length - VLIMIT} more responses ▼</button>`;
-      }
-      h += `</div>`;
-      return h;
-    };
-    html += `<div class="chart-card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem">
-        <div>
-          <div class="chart-card-title" style="margin-bottom:0.15rem">Verbatim Responses <span>${specVData.length} total</span></div>
-          <div style="font-size:0.68rem;color:var(--text-muted)">Showing up to ${VLIMIT} responses per question — use the search box to filter</div>
-        </div>
-      </div>
-      <input type="text" class="verbatim-search" placeholder="🔍 Search verbatims..." oninput="filterVerbatims(this.value)">
-      <div style="font-size:0.72rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#80BBAD;margin-bottom:0.5rem;margin-top:0.25rem">Q26 · Specialty Space Requirements (${specVData.length})</div>`;
-    html += sentVerbBlock(specVData, 'verbatim-item');
-    html += `</div>`;
-  }
 
   // ── Final Comments (Q51) ──────────────────────────────────────────────
   const q51Data = rows.map(r => ({ text: gv(r, C.Q51), dept: gv(r, C.DEPT) })).filter(v => v.text && v.text.length > 5);
