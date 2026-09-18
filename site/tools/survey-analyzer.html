@@ -995,7 +995,8 @@ const C = {
   Q20_L:['Socializing nearby','Calls/meetings nearby','Devices/equipment/HVAC','Outside noise','Other','N/A — no noise distractions'],
   LUNFREQ:'LUNFREQ', LUNLOCAL:'LUNLOCAL', TECHNEED:'TECHNEED',
   Q26:'SPECREQ.A1', Q31:'MGRFREQ', Q32:'COLLABVBM.A1', Q34:'HALLREC', Q51:'FINALVBM.A1',
-  Q13: [], // cross-team collaborators — multi-select columns detected at parse time
+  Q13: [],    // cross-team collaborators — multi-select columns detected at parse time
+  HYBMTG: '', // virtual participation in in-office meetings — detected at parse time
 };
 
 const LIKERT_MAP = {
@@ -1010,6 +1011,7 @@ let allRows = [];
 let colIdx = {};
 let filteredRows = [];
 let extraDemoColumns = [];
+let writeInCols = [];
 let qTextsMap = {};
 let allCategoricalColumns = [];
 let customQuestions = []; // [{id, code, label, scaleType, section}]
@@ -1318,8 +1320,10 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     });
   }
 
-  // Q13: cross-team collaborators — collect ALL columns whose question text matches
+  // Q13: cross-team collaborators — collect columns whose question text matches,
+  // but only from the FIRST matching question group (same question text = same multi-select)
   const q13Detected = [];
+  let q13FirstText = null;
   codes.forEach((code, i) => {
     if (!code || !code.trim()) return;
     const qt = (qTexts[i] || '').toLowerCase();
@@ -1327,9 +1331,49 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
       (qt.includes('which') && (qt.includes('business unit') || qt.includes('department') || qt.includes('team') || qt.includes('division') || qt.includes('office')) && (qt.includes('work with') || qt.includes('collaborate') || qt.includes('most frequently'))) ||
       (qt.includes('cross-team') || qt.includes('cross team')) ||
       (qt.includes('top') && qt.includes('collaborat') && (qt.includes('department') || qt.includes('team') || qt.includes('unit') || qt.includes('division') || qt.includes('office')))
-    ) { q13Detected.push(code.trim()); }
+    ) {
+      if (q13FirstText === null) q13FirstText = qt;
+      if (qt === q13FirstText) q13Detected.push(code.trim());
+    }
   });
   if (q13Detected.length) C.Q13 = q13Detected;
+
+  // RBEN: detect if all default remote-benefit columns are absent from this CSV
+  if (C.RBEN.every(code => colIdx[code] === undefined)) {
+    const rbenDet = [];
+    codes.forEach((code, ci) => {
+      if (!code || !code.trim()) return;
+      const qt = (qTexts[ci] || '').toLowerCase();
+      const hasBen = ['benefit','advantage','encourage','motivat','reason'].some(k => qt.includes(k));
+      const hasRem = ['remote','work from home','working from home','work remotely','working remotely'].some(k => qt.includes(k));
+      if (hasBen && hasRem) rbenDet.push(code.trim());
+    });
+    if (rbenDet.length) C.RBEN = rbenDet;
+  }
+
+  // OBEN: detect if all default office-benefit columns are absent from this CSV
+  if (C.OBEN.every(code => colIdx[code] === undefined)) {
+    const obenDet = [];
+    codes.forEach((code, ci) => {
+      if (!code || !code.trim()) return;
+      const qt = (qTexts[ci] || '').toLowerCase();
+      const hasBen = ['benefit','advantage','encourage','motivat','reason'].some(k => qt.includes(k));
+      const hasOff = ['office','in person','in-person','onsite','on-site','coming in','going in'].some(k => qt.includes(k));
+      if (hasBen && hasOff) obenDet.push(code.trim());
+    });
+    if (obenDet.length) C.OBEN = obenDet;
+  }
+
+  // HYBMTG: "how often do you add others to join virtually" for in-office meetings
+  if (!C.HYBMTG) {
+    codes.forEach((code, ci) => {
+      if (C.HYBMTG || !code || !code.trim()) return;
+      const qt = (qTexts[ci] || '').toLowerCase();
+      const hasVirt = qt.includes('virtual') || qt.includes('join remotely') || qt.includes('dial in');
+      const hasMtg  = qt.includes('meeting') || qt.includes('in-office') || qt.includes('in office') || qt.includes('in person') || qt.includes('in the office');
+      if (hasVirt && hasMtg) C.HYBMTG = code.trim();
+    });
+  }
 
   // Collect any additional categorical columns not already claimed by ANY known C column
   extraDemoColumns = [];
@@ -1399,6 +1443,33 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     const vals3 = [...uniq2];
     if (vals3.every(v => /^[\d.,%-]+$/.test(v))) return;
     allCategoricalColumns.push({ code: c2, label: qt2, vals: vals3.sort() });
+  });
+
+  // Write-in verbatim columns: free-text "Other (specify)" companions
+  // Detect columns not already claimed whose question text suggests an open-ended "Other" field
+  writeInCols = [];
+  const allClaimedForWriteIn = new Set(Object.values(C).flatMap(v =>
+    typeof v === 'string' ? [v] : Array.isArray(v) ? v.filter(x => typeof x === 'string') : []
+  ));
+  codes.forEach((code, i) => {
+    if (!code || !code.trim()) return;
+    const c3 = code.trim();
+    if (allClaimedForWriteIn.has(c3)) return;
+    const qt3 = (qTexts[i] || '').toLowerCase();
+    const looksLikeWriteIn =
+      (qt3.includes('other') && (qt3.includes('specify') || qt3.includes('please') || qt3.includes('write'))) ||
+      qt3.includes('if other') || qt3.includes('please specify') || qt3.includes('write-in') || qt3.includes('write in');
+    if (!looksLikeWriteIn) return;
+    const responses = [];
+    for (let j = 0; j < dataRows.length; j++) {
+      const v = (dataRows[j][i] || '').trim();
+      if (v) responses.push(v);
+    }
+    if (!responses.length) return;
+    const uq = new Set(responses);
+    const al = [...uq].reduce((s, v) => s + v.length, 0) / uq.size;
+    if (al < 3 || al > 500) return;
+    writeInCols.push({ code: c3, label: (qTexts[i] || '').trim() || c3, responses });
   });
 }
 
@@ -1577,6 +1648,7 @@ function initApp() {
     colIdx           = p.colIdx           || {};
     qTextsMap        = p.qTextsMap        || {};
     extraDemoColumns = p.extraDemoColumns || [];
+    writeInCols      = p.writeInCols      || [];
     if (p.cOverrides) Object.assign(C, p.cOverrides);
     if (p.customQuestions) customQuestions = p.customQuestions;
     const m = p.meta || {};
@@ -1947,7 +2019,15 @@ function loadCustomQuestionsFromStorage() {
 
 // Render all custom question charts into their sections
 function renderCustomCharts(sectionKey) {
-  const qs = customQuestions.filter(q => q.section === sectionKey && q.code && colIdx[q.code] !== undefined);
+  const knownCodes = new Set(Object.values(C).flatMap(v =>
+    typeof v === 'string' ? [v] : Array.isArray(v) ? v.filter(x => typeof x === 'string') : []
+  ));
+  const qs = customQuestions.filter(q =>
+    q.section === sectionKey &&
+    q.code &&
+    colIdx[q.code] !== undefined &&
+    !knownCodes.has(q.code)
+  );
   if (!qs.length) return '';
 
   let html = '';
@@ -2689,6 +2769,27 @@ function renderRel() {
   html += `<div class="chart-card"><div class="chart-card-title">Hosting Frequency at Office</div><div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem">How frequently do you host each of the following groups in the office?</div><div class="stacked-chart">`;
   hd.forEach(d => html += stackedBar(d.label, d.d, d.t, d.avg));
   html += `</div><div class="chart-legend">${['Never','Quarterly/Rarely','Biweekly/Monthly','Daily/Weekly'].map((l,i)=>`<div class="legend-item"><div class="legend-dot" style="background:${hostColors[3-i]}"></div>${l}</div>`).join('')}</div></div>`;
+
+  // HYBMTG: virtual participation in in-office meetings
+  if (C.HYBMTG && colIdx[C.HYBMTG] !== undefined) {
+    const hybFreq = {};
+    let hybTot = 0;
+    rows.forEach(r => { const v = gv(r, C.HYBMTG).trim(); if (v) { hybFreq[v] = (hybFreq[v]||0) + 1; hybTot++; } });
+    if (hybTot > 0) {
+      const freqOrder = ['always','usually','often','sometimes','rarely','never','n/a','not applicable'];
+      const sorted = Object.entries(hybFreq).sort((a, b) => {
+        const ai = freqOrder.findIndex(f => a[0].toLowerCase().includes(f));
+        const bi = freqOrder.findIndex(f => b[0].toLowerCase().includes(f));
+        return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+      });
+      html += `<div class="chart-card"><div class="chart-card-title">${qLabel(C.HYBMTG,'Virtual Participation in In-Office Meetings')}</div><div class="stacked-chart">`;
+      sorted.forEach(([label, count]) => {
+        const pv = pct(count, hybTot);
+        html += `<div class="bar-row"><span class="bar-label">${esc(label)}</span><div class="bar-track"><div class="bar-fill" style="width:${pv}%;background:#17E88F"></div></div><span class="bar-pct">${pv}%</span></div>`;
+      });
+      html += `</div><div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.5rem">N = ${hybTot}</div></div>`;
+    }
+  }
 
   // Time splits
   const ti = avg(numVals(rows,C.TIME_I))||0;
@@ -3439,16 +3540,17 @@ function renderAttendance() {
   const rows = filteredRows;
   const isFilteredA = filteredRows.length < allRows.length;
   const mkDims = r => {
-    const gp = col => cbPct(r, col);
+    const gp = col => col ? cbPct(r, col) : 0;
+    // C.OBEN default indices: 0=GATHER,1=LEADVIS,2=COMMS,3=BWLB,4=OCONNECT,5=TECH,6=ODISTRACT,7=OPRIVATE,8=OCONFIG
     return [
-      { icon:'⚙️', name:'Functionality', score: avg([gp('OPOTBEN.TECH'),gp('OPOTBEN.OCONFIG')])||0,
-        items:[{l:'Better technology',pct:gp('OPOTBEN.TECH')},{l:'Custom workspace setup',pct:gp('OPOTBEN.OCONFIG')}] },
-      { icon:'🤝', name:'Teamwork', score: avg([gp('OPOTBEN.COMMS'),gp('OPOTBEN.OCONNECT')])||0,
-        items:[{l:'Better communication',pct:gp('OPOTBEN.COMMS')},{l:'Office connections',pct:gp('OPOTBEN.OCONNECT')}] },
-      { icon:'👁️', name:'Exposure', score: avg([gp('OPOTBEN.LEADVIS'),gp('OPOTBEN.GATHER')])||0,
-        items:[{l:'Leadership visibility',pct:gp('OPOTBEN.LEADVIS')},{l:'Team gatherings',pct:gp('OPOTBEN.GATHER')}] },
-      { icon:'✨', name:'Experience', score: avg([gp('OPOTBEN.BWLB'),gp('OPOTBEN.OPRIVATE'),gp('OPOTBEN.ODISTRACT')])||0,
-        items:[{l:'Work-life separation',pct:gp('OPOTBEN.BWLB')},{l:'Private workspace',pct:gp('OPOTBEN.OPRIVATE')},{l:'Fewer distractions',pct:gp('OPOTBEN.ODISTRACT')}] },
+      { icon:'⚙️', name:'Functionality', score: avg([gp(C.OBEN[5]),gp(C.OBEN[8])])||0,
+        items:[{l:qLabel(C.OBEN[5],C.OBEN_L[5]),pct:gp(C.OBEN[5])},{l:qLabel(C.OBEN[8],C.OBEN_L[8]),pct:gp(C.OBEN[8])}] },
+      { icon:'🤝', name:'Teamwork', score: avg([gp(C.OBEN[2]),gp(C.OBEN[4])])||0,
+        items:[{l:qLabel(C.OBEN[2],C.OBEN_L[2]),pct:gp(C.OBEN[2])},{l:qLabel(C.OBEN[4],C.OBEN_L[4]),pct:gp(C.OBEN[4])}] },
+      { icon:'👁️', name:'Exposure', score: avg([gp(C.OBEN[1]),gp(C.OBEN[0])])||0,
+        items:[{l:qLabel(C.OBEN[1],C.OBEN_L[1]),pct:gp(C.OBEN[1])},{l:qLabel(C.OBEN[0],C.OBEN_L[0]),pct:gp(C.OBEN[0])}] },
+      { icon:'✨', name:'Experience', score: avg([gp(C.OBEN[3]),gp(C.OBEN[7]),gp(C.OBEN[6])])||0,
+        items:[{l:qLabel(C.OBEN[3],C.OBEN_L[3]),pct:gp(C.OBEN[3])},{l:qLabel(C.OBEN[7],C.OBEN_L[7]),pct:gp(C.OBEN[7])},{l:qLabel(C.OBEN[6],C.OBEN_L[6]),pct:gp(C.OBEN[6])}] },
     ];
   };
   const dims = mkDims(rows);
@@ -4334,6 +4436,23 @@ function renderSentiment() {
     </div>`;
   }
 
+  // Write-in verbatim columns (auto-detected "Other specify" free-text responses)
+  if (writeInCols.length) {
+    const VLIM = 20;
+    writeInCols.forEach(({ label, responses }) => {
+      const uniq = [...new Set(responses.filter(v => v.trim()))];
+      if (!uniq.length) return;
+      const shown = uniq.slice(0, VLIM);
+      let wh = `<div class="verbatim-list">`;
+      shown.forEach(v => { wh += `<div class="verbatim-item">${esc(v)}</div>`; });
+      if (uniq.length > VLIM) wh += `<div class="verbatim-hidden" style="display:none">` + uniq.slice(VLIM).map(v => `<div class="verbatim-item">${esc(v)}</div>`).join('') + `</div><button class="verbatim-more-btn" onclick="this.previousElementSibling.style.display='block';this.style.display='none'">Show ${uniq.length - VLIM} more ▼</button>`;
+      wh += `</div>`;
+      html += `<div class="chart-card"><div class="chart-card-title">${esc(label)} <span>${uniq.length} responses</span></div>
+        <input type="text" class="verbatim-search" placeholder="🔍 Search responses..." oninput="filterVerbatims(this.value)">
+        ${wh}</div>`;
+    });
+  }
+
   document.getElementById('sentimentContent').innerHTML = html;
   removeEmptyChartCards('sentimentContent');
   insertCustomChartsBlock('sentimentContent', 'sentiment');
@@ -4385,13 +4504,13 @@ function exportPDFReport() {
   function lvlAvg(rArr,cols){const vals=rArr.flatMap(r=>cols.map(c=>parseLikert(gv(r,c))).filter(v=>v!==null));return vals.length?(vals.reduce((s,v)=>s+v,0)/vals.length/4*100):null;}
   const pyrD=pyrLevels.map(l=>({...l,overall:lvlAvg(rows,l.cols),proAvg:lvlAvg(tierR.pro,l.cols),pasAvg:lvlAvg(tierR.pas,l.cols),detAvg:lvlAvg(tierR.det,l.cols)}));
 
-  // Attendance
-  const gp=col=>cbPct(rows,col);
+  // Attendance — use C.OBEN[n] so auto-detected codes work
+  const gp=col=>col?cbPct(rows,col):0;
   const dims=[
-    {icon:'⚙️',name:'Functionality',score:avg([gp('OPOTBEN.TECH'),gp('OPOTBEN.OCONFIG')])||0},
-    {icon:'🤝',name:'Teamwork',     score:avg([gp('OPOTBEN.COMMS'),gp('OPOTBEN.OCONNECT')])||0},
-    {icon:'👁️',name:'Exposure',    score:avg([gp('OPOTBEN.LEADVIS'),gp('OPOTBEN.GATHER')])||0},
-    {icon:'✨',name:'Experience',   score:avg([gp('OPOTBEN.BWLB'),gp('OPOTBEN.OPRIVATE'),gp('OPOTBEN.ODISTRACT')])||0},
+    {icon:'⚙️',name:'Functionality',score:avg([gp(C.OBEN[5]),gp(C.OBEN[8])])||0},
+    {icon:'🤝',name:'Teamwork',     score:avg([gp(C.OBEN[2]),gp(C.OBEN[4])])||0},
+    {icon:'👁️',name:'Exposure',    score:avg([gp(C.OBEN[1]),gp(C.OBEN[0])])||0},
+    {icon:'✨',name:'Experience',   score:avg([gp(C.OBEN[3]),gp(C.OBEN[7]),gp(C.OBEN[6])])||0},
   ];
   const topDriver=[...dims].sort((a,b)=>b.score-a.score)[0];
 
@@ -5003,7 +5122,7 @@ function downloadClientPackage() {
   });
 
   // Escape closing-script tags in JSON to avoid breaking the injected script block
-  const dataJson = JSON.stringify({ allRows, colIdx, qTextsMap, extraDemoColumns, cOverrides, customQuestions, meta: { clientName, sector, headcount } })
+  const dataJson = JSON.stringify({ allRows, colIdx, qTextsMap, extraDemoColumns, writeInCols, cOverrides, customQuestions, meta: { clientName, sector, headcount } })
                     .replace(/<\/script>/gi, '<\\/script>');
 
   const preloadScript = `<script>window.__PRELOADED__=${dataJson};<\/script>`;
