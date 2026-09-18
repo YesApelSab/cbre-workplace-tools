@@ -329,7 +329,6 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
 .driver-bar-fill { height: 100%; border-radius: 3px; }
 .driver-items { display: flex; flex-direction: column; gap: 0.28rem; }
 .driver-item { font-size: 0.73rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem; }
-.driver-item::before { content: '›'; color: var(--accent); }
 
 /* WORK STYLES — PERSONALITY SCALES */
 .ws-stat-row { display: grid; grid-template-columns: repeat(6,1fr); gap: 0.7rem; margin-bottom: 1.2rem; }
@@ -1992,7 +1991,11 @@ function renderCustomCharts(sectionKey) {
         n++;
       });
       if (!n) { html += `<div class="chart-card"><div class="chart-card-title">${label}</div><div class="empty-state">No data for current filters.</div></div>`; return; }
-      const sorted = Object.entries(counts).sort((a,b) => b[1]-a[1]);
+      const sorted = Object.entries(counts).sort((a,b) => {
+        const aO = /^other/i.test(a[0].trim()); const bO = /^other/i.test(b[0].trim());
+        if (aO !== bO) return aO ? 1 : -1;
+        return b[1] - a[1];
+      });
       const bars = sorted.map(([val, cnt]) => {
         const w = Math.round((cnt/n)*100);
         return `<div class="bar-row">
@@ -2439,7 +2442,13 @@ function renderSpace() {
   }
 
   // Noise Distraction Sources (Q20 — multi-select checkboxes)
-  const noiseData = C.Q20.map((col,i) => ({ label:C.Q20_L[i], p:cbPct(rows,col) })).filter(d=>d.p>0).sort((a,b)=>b.p-a.p);
+  const noiseData = C.Q20.map((col,i) => ({ label:C.Q20_L[i], p:cbPct(rows,col) })).filter(d=>d.p>0)
+    .sort((a,b) => {
+      const aOther = /^(other|n\/a)/i.test(a.label.trim());
+      const bOther = /^(other|n\/a)/i.test(b.label.trim());
+      if (aOther !== bOther) return aOther ? 1 : -1;
+      return b.p - a.p;
+    });
   if (noiseData.length) {
     html += `<div class="chart-card"><div class="chart-card-title">Noise Distraction Sources <span>% who selected each</span></div><div class="h-bar-chart">`;
     noiseData.forEach(({label,p}) => { html += hBar(label,p,'#D2785A'); });
@@ -2484,7 +2493,7 @@ function renderSpace() {
           <span style="font-size:0.72rem;color:var(--text-muted);min-width:60px;text-align:right">${n} (${w}%)</span>
         </div>`;
       }).join('');
-      html += `<div class="chart-card"><div class="chart-card-title">Technology & Space Needs</div>${techBars}</div>`;
+      html += `<div class="chart-card"><div class="chart-card-title">Technology & Space Needs</div>${techBars}<p style="font-size:0.74rem;color:var(--text-muted);margin-top:0.75rem;line-height:1.6">Respondents selected the technology profile that best describes their workspace needs.</p></div>`;
     }
     html += `</div>`;
   }
@@ -3081,17 +3090,14 @@ function renderFuture() {
 function personalityScalesSVG(chartOrder) {
   const W = 620, padL = 112, padR = 112, trackW = W - padL - padR;
   const rowH = 52, axisH = 26, legendH = 36;
-  const pillW = 36, pillH = 16;
   let g = '';
 
   const hasOrgAvg = chartOrder.some(s => s.orgPct !== null && s.orgPct !== undefined);
-  const topPad = hasOrgAvg ? 26 : 8;
+  const topPad = 8;
   const H = topPad + chartOrder.length * rowH + axisH + legendH;
 
   chartOrder.forEach((s, i) => {
     const cy = topPad + i * rowH + rowH / 2;
-    const rawX = padL + (s.pct / 100) * trackW;
-    const pillX = Math.min(Math.max(rawX - pillW / 2, padL), padL + trackW - pillW);
 
     // Left label
     g += `<text x="${padL - 10}" y="${cy}" font-size="11" fill="rgba(23,232,143,0.85)" text-anchor="end" dominant-baseline="middle" font-family="DM Sans,Arial,sans-serif">${s.low}</text>`;
@@ -3102,20 +3108,27 @@ function personalityScalesSVG(chartOrder) {
       const tx = padL + (pct / 100) * trackW;
       g += `<line x1="${tx.toFixed(1)}" y1="${cy - 6}" x2="${tx.toFixed(1)}" y2="${cy + 6}" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>`;
     });
-    // Pill marker (filtered or overall avg) — drawn first so diamond sits on top
-    const pillLabel = s.orgPct !== null && s.orgPct !== undefined ? `Filtered avg: ${s.pct}%` : `${s.pct}%`;
-    g += `<g onmousemove="showScaleTip(event,'${pillLabel}')" onmouseleave="hideScaleTip()" style="cursor:default">`;
-    g += `<rect x="${pillX.toFixed(1)}" y="${(cy - pillH / 2).toFixed(1)}" width="${pillW}" height="${pillH}" rx="8" fill="rgba(242,244,243,0.72)"/>`;
-    g += `<rect x="${pillX.toFixed(1)}" y="${(cy - 12).toFixed(1)}" width="${pillW}" height="24" rx="8" fill="transparent"/>`;
-    g += `</g>`;
-    // Org-average diamond marker — floated above the track so it's never buried by the pill
+    const lineH = 20; // height of vertical marker lines
     if (s.orgPct !== null && s.orgPct !== undefined) {
+      // Two-line mode: filtered avg = white line, company avg = accent green line
       const ox = padL + (s.orgPct / 100) * trackW;
-      const d = 6, dy = cy - 16;
-      g += `<line x1="${ox.toFixed(1)}" y1="${(dy + d + 1).toFixed(1)}" x2="${ox.toFixed(1)}" y2="${(cy - pillH / 2).toFixed(1)}" stroke="rgba(23,232,143,0.35)" stroke-width="1" stroke-dasharray="2,2"/>`;
+      // Company avg line (green)
       g += `<g onmousemove="showScaleTip(event,'Company avg: ${s.orgPct}%')" onmouseleave="hideScaleTip()" style="cursor:default">`;
-      g += `<polygon points="${ox.toFixed(1)},${(dy - d).toFixed(1)} ${(ox + d).toFixed(1)},${dy.toFixed(1)} ${ox.toFixed(1)},${(dy + d).toFixed(1)} ${(ox - d).toFixed(1)},${dy.toFixed(1)}" fill="rgba(23,232,143,0.55)" stroke="rgba(23,232,143,0.9)" stroke-width="1.5"/>`;
-      g += `<circle cx="${ox.toFixed(1)}" cy="${dy.toFixed(1)}" r="12" fill="transparent"/>`;
+      g += `<line x1="${ox.toFixed(1)}" y1="${(cy - lineH / 2).toFixed(1)}" x2="${ox.toFixed(1)}" y2="${(cy + lineH / 2).toFixed(1)}" stroke="#17E88F" stroke-width="2.5" stroke-linecap="round"/>`;
+      g += `<rect x="${(ox - 8).toFixed(1)}" y="${(cy - lineH / 2).toFixed(1)}" width="16" height="${lineH}" fill="transparent"/>`;
+      g += `</g>`;
+      // Filtered avg line (white)
+      const fx = padL + (s.pct / 100) * trackW;
+      g += `<g onmousemove="showScaleTip(event,'Filtered avg: ${s.pct}%')" onmouseleave="hideScaleTip()" style="cursor:default">`;
+      g += `<line x1="${fx.toFixed(1)}" y1="${(cy - lineH / 2).toFixed(1)}" x2="${fx.toFixed(1)}" y2="${(cy + lineH / 2).toFixed(1)}" stroke="rgba(242,244,243,0.85)" stroke-width="2.5" stroke-linecap="round"/>`;
+      g += `<rect x="${(fx - 8).toFixed(1)}" y="${(cy - lineH / 2).toFixed(1)}" width="16" height="${lineH}" fill="transparent"/>`;
+      g += `</g>`;
+    } else {
+      // Single-line mode: accent green
+      const fx = padL + (s.pct / 100) * trackW;
+      g += `<g onmousemove="showScaleTip(event,'${s.pct}%')" onmouseleave="hideScaleTip()" style="cursor:default">`;
+      g += `<line x1="${fx.toFixed(1)}" y1="${(cy - lineH / 2).toFixed(1)}" x2="${fx.toFixed(1)}" y2="${(cy + lineH / 2).toFixed(1)}" stroke="#17E88F" stroke-width="2.5" stroke-linecap="round"/>`;
+      g += `<rect x="${(fx - 8).toFixed(1)}" y="${(cy - lineH / 2).toFixed(1)}" width="16" height="${lineH}" fill="transparent"/>`;
       g += `</g>`;
     }
     // Right label
@@ -3132,17 +3145,17 @@ function personalityScalesSVG(chartOrder) {
   // Legend
   const legY = axisY + 22;
   if (hasOrgAvg) {
-    // Two-item legend: filtered pill + org diamond
+    // Two-item legend: filtered white line + company green line
     const legCx = W / 2 - 80;
-    g += `<rect x="${(legCx - 18).toFixed(1)}" y="${(legY - 7).toFixed(1)}" width="36" height="14" rx="7" fill="rgba(242,244,243,0.65)"/>`;
-    g += `<text x="${(legCx + 24).toFixed(1)}" y="${(legY + 4).toFixed(1)}" font-size="9.5" fill="rgba(242,244,243,0.45)" text-anchor="start" font-family="DM Sans,Arial,sans-serif">Filtered avg</text>`;
-    const ox2 = legCx + 120; const d2 = 6;
-    g += `<polygon points="${ox2.toFixed(1)},${(legY - d2).toFixed(1)} ${(ox2 + d2).toFixed(1)},${legY.toFixed(1)} ${ox2.toFixed(1)},${(legY + d2).toFixed(1)} ${(ox2 - d2).toFixed(1)},${legY.toFixed(1)}" fill="none" stroke="rgba(23,232,143,0.5)" stroke-width="1.5"/>`;
-    g += `<text x="${(ox2 + 12).toFixed(1)}" y="${(legY + 4).toFixed(1)}" font-size="9.5" fill="rgba(242,244,243,0.45)" text-anchor="start" font-family="DM Sans,Arial,sans-serif">Company avg</text>`;
+    g += `<line x1="${(legCx - 8).toFixed(1)}" y1="${legY.toFixed(1)}" x2="${(legCx + 8).toFixed(1)}" y2="${legY.toFixed(1)}" stroke="rgba(242,244,243,0.8)" stroke-width="2.5" stroke-linecap="round"/>`;
+    g += `<text x="${(legCx + 16).toFixed(1)}" y="${(legY + 4).toFixed(1)}" font-size="9.5" fill="rgba(242,244,243,0.45)" text-anchor="start" font-family="DM Sans,Arial,sans-serif">Filtered avg</text>`;
+    const ox2 = legCx + 120;
+    g += `<line x1="${(ox2 - 8).toFixed(1)}" y1="${legY.toFixed(1)}" x2="${(ox2 + 8).toFixed(1)}" y2="${legY.toFixed(1)}" stroke="#17E88F" stroke-width="2.5" stroke-linecap="round"/>`;
+    g += `<text x="${(ox2 + 16).toFixed(1)}" y="${(legY + 4).toFixed(1)}" font-size="9.5" fill="rgba(242,244,243,0.45)" text-anchor="start" font-family="DM Sans,Arial,sans-serif">Company avg</text>`;
   } else {
     const legX = W / 2;
-    g += `<rect x="${(legX - 20).toFixed(1)}" y="${(legY - 7).toFixed(1)}" width="36" height="14" rx="7" fill="rgba(242,244,243,0.65)"/>`;
-    g += `<text x="${(legX + 22).toFixed(1)}" y="${(legY + 4).toFixed(1)}" font-size="9.5" fill="rgba(242,244,243,0.45)" text-anchor="start" font-family="DM Sans,Arial,sans-serif">Survey Average</text>`;
+    g += `<line x1="${(legX - 12).toFixed(1)}" y1="${legY.toFixed(1)}" x2="${(legX + 12).toFixed(1)}" y2="${legY.toFixed(1)}" stroke="#17E88F" stroke-width="2.5" stroke-linecap="round"/>`;
+    g += `<text x="${(legX + 20).toFixed(1)}" y="${(legY + 4).toFixed(1)}" font-size="9.5" fill="rgba(242,244,243,0.45)" text-anchor="start" font-family="DM Sans,Arial,sans-serif">Survey Average</text>`;
   }
 
   return `<svg id="personalityScalesSVG" xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;margin:0 auto;max-width:100%">${g}</svg>`;
@@ -3310,7 +3323,7 @@ function renderAttendance() {
     html += `<div class="driver-card"><div class="driver-icon">${icon}</div><div class="driver-name">${name}</div>
       <div class="driver-score">${w}%</div>
       <div class="driver-bar"><div class="driver-bar-fill" style="width:${w}%;background:${bc}"></div></div>
-      <div class="driver-items">${items.map(({l,pct:p})=>`<div class="driver-item" style="display:flex;justify-content:space-between;gap:0.5rem"><span>${l}</span><span style="font-size:0.72rem;font-weight:700;color:var(--text-muted)">${Math.round(p||0)}%</span></div>`).join('')}</div></div>`;
+      <div class="driver-items">${items.map(({l,pct:p})=>`<div class="driver-item" style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem"><span style="display:flex;align-items:center;gap:0.3rem"><span style="color:var(--accent);flex-shrink:0">›</span>${esc(l)}</span><span style="font-size:0.72rem;font-weight:700;color:var(--text-muted);white-space:nowrap">${Math.round(p||0)}%</span></div>`).join('')}</div></div>`;
   });
 
   html += `</div>`;
