@@ -1337,6 +1337,9 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
   const dataStart = isSingleHeader ? 1 : 3;
   const dataRows  = rows.slice(dataStart).filter(r => r.some(c => c && c.trim()));
   let deptFound = false, genFound = false, tenureFound = false, roleFound = false;
+  // Record original default C values for demographic slots before detection may reassign them.
+  // Displaced codes are still "demographic" and must not appear as extra inline filters.
+  const origDemoCodes = new Set([C.DEPT, C.ROLE, C.GEN, C.TENURE, C.FREQOFF].filter(Boolean));
 
   // Build matrixParents first so stem detection is available for all subsequent blocks.
   // X is a parent only when it EXISTS in the CSV AND has numbered children (X_1 / X.1 etc.).
@@ -1563,7 +1566,9 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
 
   // Collect any additional categorical columns not already claimed by ANY known C column
   extraDemoColumns = [];
-  // Claim every string value in C (scalar codes and all array entries) so no known column leaks through
+  // Claim every string value in C (scalar codes and all array entries) so no known column leaks through.
+  // Also claim original default demographic codes — if detection displaced Q4→Q5 for ROLE, Q4 is still
+  // a demographic slot and must not reappear as a separate inline filter.
   const claimedCodes = new Set(
     Object.values(C).reduce((acc, v) => {
       if (typeof v === 'string') acc.push(v);
@@ -1571,6 +1576,7 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
       return acc;
     }, [])
   );
+  origDemoCodes.forEach(c => claimedCodes.add(c));
   // Question-text patterns that indicate opinion/behavior/rating questions — not demographic groupings
   const OPINION_PATTERNS = [
     'please rate','rate your','rate the','rate each','agreement',
