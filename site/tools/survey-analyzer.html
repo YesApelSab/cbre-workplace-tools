@@ -1226,7 +1226,11 @@ function supplyDist(rows, col) {
 
 // Returns the actual question text from the CSV for a column code, falling back to a default.
 function qLabel(col, fallback) {
-  return (col && qTextsMap[col]) ? qTextsMap[col] : (fallback || col || '');
+  const t = col && qTextsMap[col];
+  if (!t) return fallback || col || '';
+  // Stem/parent question text is always 100+ chars; sub-item labels are <80. Use fallback for stems.
+  if (t.length > 80) return fallback || col || '';
+  return t;
 }
 
 // ─── CSV PARSE ────────────────────────────────────────────────────────────────
