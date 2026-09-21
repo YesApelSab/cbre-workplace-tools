@@ -1304,10 +1304,19 @@ function supplyDist(rows, col) {
   return c;
 }
 
-// Returns the actual question text from the CSV for a column code, falling back to a default.
+// Returns the label for a column, preferring the CSV question text unless it looks like
+// a matrix intro (very long relative to the fallback, or starts with a survey instruction
+// phrase). Key Survey exports often put the full parent question text in the first
+// sub-column's row-1 entry — in that case the clean fallback label is always better.
 function qLabel(col, fallback) {
   const t = col && qTextsMap[col];
-  return t || fallback || col || '';
+  if (!t) return fallback || col || '';
+  if (!fallback) return t;
+  const tl = t.toLowerCase();
+  const isIntro = t.length > fallback.length * 2.5 ||
+    ['for each', 'please rate', 'please indicate', 'please select', 'please specify',
+     'to what extent', 'how much', 'how often', 'how would'].some(p => tl.startsWith(p));
+  return isIntro ? fallback : t;
 }
 
 // ─── CSV PARSE ────────────────────────────────────────────────────────────────
