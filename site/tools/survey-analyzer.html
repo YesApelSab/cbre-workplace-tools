@@ -1662,6 +1662,19 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
       const arr = C[key];
       const labelArr = C[key + '_L'];
       if (!Array.isArray(arr)) return;
+
+      // Collect stem prefixes: if a matched code is e.g. SSUPPLY.PISPACE, then 'SSUPPLY'
+      // is a stem prefix. Pool entries whose code equals a stem prefix are the matrix
+      // intro/question-text columns — never valid data columns for these slots.
+      const stemPrefixes = new Set();
+      arr.forEach(col => {
+        if (!col || colIdx[col] === undefined) return;
+        const dot = col.indexOf('.');
+        const us  = col.indexOf('_');
+        const sep = dot !== -1 ? dot : us;
+        if (sep > 0) stemPrefixes.add(col.slice(0, sep));
+      });
+
       arr.forEach((col, slotIdx) => {
         if (!col || colIdx[col] !== undefined) return; // already matched
         const label = (labelArr && labelArr[slotIdx]) || '';
@@ -1674,6 +1687,8 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
         let bestScore = 0, bestEntry = null;
         pool.forEach(entry => {
           if (claimed.has(entry.code)) return;
+          // Skip matrix stem columns (bare prefix like 'SSUPPLY', 'SFUNCTION', etc.)
+          if (stemPrefixes.has(entry.code)) return;
           const score = keywords.reduce((s, kw) => s + (entry.qt.includes(kw) ? 1 : 0), 0);
           if (score > bestScore) { bestScore = score; bestEntry = entry; }
         });
