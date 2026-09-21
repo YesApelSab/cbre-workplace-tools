@@ -1473,13 +1473,14 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     writeInCols.push({ code: c3, label: (qTexts[i] || '').trim() || c3, responses });
   });
 
-  // Identify matrix parent columns structurally: if the CSV contains codes X_1/X.1/X_01 etc.,
-  // then X is a parent column and must never appear as a chart row, regardless of its data.
+  // Identify matrix parent columns: X is a parent only when (a) numbered children X_1/X.1/etc.
+  // exist in the CSV AND (b) X itself is a real column in the CSV. Without condition (b),
+  // sub-items like SUPPLY.1 would be falsely flagged as parents whenever SUPPLY.1.1 exists.
   const matrixParents = new Set();
   codes.forEach(code => {
     if (!code) return;
     const m = code.trim().match(/^(.+?)[._]\d+$/);
-    if (m) matrixParents.add(m[1]);
+    if (m && colIdx[m[1]] !== undefined) matrixParents.add(m[1]);
   });
   // A column is a stem if and only if it appears as a parent in the structural detection above.
   // Do NOT fall back to question-text length — Key Survey exports verbose text for real sub-items too.
