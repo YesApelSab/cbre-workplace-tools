@@ -2229,7 +2229,8 @@ function initApp() {
   }
   document.getElementById('uploadScreen').style.display = 'none';
   document.getElementById('appLayout').classList.add('active');
-  buildFilters();
+  const _snap = window.__PRELOADED__ && window.__PRELOADED__.filterSnapshot;
+  if (_snap) { restoreFilterSnapshot(_snap); } else { buildFilters(); }
   applyFilters();
   checkColumns();
   const p2 = window.__PRELOADED__;
@@ -2312,13 +2313,15 @@ function buildFilters() {
     // Most frequent → least frequent
     [C.FREQOFF]:['Every day (5 days per week)','4 days per week','2-3 days per week','1 day per week','Less than one day per week','Never (fully remote)'],
   };
+  const _usedFilterCols = new Set();
   [['fDept',C.DEPT,'All Departments'],['fRole',C.ROLE,'All Roles'],['fGen',C.GEN,'All Generations'],['fTenure',C.TENURE,'All Tenure'],['fFreq',C.FREQOFF,'All Frequencies']].forEach(([id,col,allText]) => {
     const wrap = document.getElementById(id);
     const filterGroup = wrap ? wrap.closest('.filter-group') : null;
-    if (!col) {
+    if (!col || _usedFilterCols.has(col)) {
       if (filterGroup) filterGroup.style.display = 'none';
       return;
     }
+    _usedFilterCols.add(col);
     if (filterGroup) filterGroup.style.display = '';
     const order = FILTER_ORDERS[col];
     const vals = [...new Set(allRows.map(r => gv(r, col)).filter(v => v))];
@@ -2350,6 +2353,34 @@ function buildFilters() {
       </div>`;
     filtersRow.insertBefore(fg, resetBtn);
     populateMultiselect(wrapId, vals);
+  });
+}
+
+function restoreFilterSnapshot(snapshot) {
+  document.querySelectorAll('.extra-filter-group').forEach(el => el.remove());
+  const filtersRow = document.querySelector('.filters-row');
+  const resetBtn = filtersRow ? filtersRow.querySelector('.reset-btn') : null;
+  snapshot.forEach(({ id, label, allText, vals, hidden, isExtra }) => {
+    let wrap, fg;
+    if (isExtra) {
+      fg = document.createElement('div');
+      fg.className = 'filter-group extra-filter-group';
+      const shortLabel = label.length > 32 ? label.slice(0, 29) + '…' : label;
+      fg.innerHTML = `<span class="filter-label" title="${label}">${shortLabel}</span>` +
+        `<div class="multiselect-wrap" id="${id}" data-alltext="${allText}">` +
+        `<button class="multiselect-btn" type="button" onclick="toggleMultiselect('${id}')">${allText}</button>` +
+        `<div class="multiselect-panel"></div></div>`;
+      if (filtersRow && resetBtn) filtersRow.insertBefore(fg, resetBtn);
+      else if (filtersRow) filtersRow.appendChild(fg);
+      wrap = fg.querySelector('.multiselect-wrap');
+    } else {
+      wrap = document.getElementById(id);
+      fg = wrap ? wrap.closest('.filter-group') : null;
+    }
+    if (!fg) return;
+    if (hidden) { fg.style.display = 'none'; return; }
+    fg.style.display = '';
+    if (wrap) { wrap.dataset.alltext = allText; populateMultiselect(id, vals); }
   });
 }
 
@@ -5757,8 +5788,22 @@ function downloadClientPackage() {
     if (typeof v === 'string' || Array.isArray(v)) cOverrides[k] = v;
   });
 
+  // Snapshot the exact filter bar state the analyst sees — labels, options, visibility.
+  // The client package restores this verbatim so no re-derivation can produce wrong filters.
+  const filterSnapshot = Array.from(document.querySelectorAll('.filters-row .filter-group')).map(fg => {
+    const label = fg.querySelector('.filter-label')?.textContent?.trim() || '';
+    const wrap = fg.querySelector('.multiselect-wrap');
+    if (!wrap) return null;
+    const id = wrap.id;
+    const allText = wrap.dataset.alltext || 'All';
+    const vals = Array.from(wrap.querySelectorAll('.multiselect-panel input[type="checkbox"]')).map(cb => cb.value).filter(Boolean);
+    const hidden = fg.style.display === 'none';
+    const isExtra = fg.classList.contains('extra-filter-group');
+    return { id, label, allText, vals, hidden, isExtra };
+  }).filter(Boolean);
+
   // Escape closing-script tags in JSON to avoid breaking the injected script block
-  const dataJson = JSON.stringify({ allRows, colIdx, qTextsMap, colMetaMap, extraDemoColumns, allCategoricalColumns, writeInCols, writeInByParent, cOverrides, customQuestions, meta: { clientName, sector, headcount } })
+  const dataJson = JSON.stringify({ allRows, colIdx, qTextsMap, colMetaMap, extraDemoColumns, allCategoricalColumns, writeInCols, writeInByParent, cOverrides, customQuestions, filterSnapshot, meta: { clientName, sector, headcount } })
                     .replace(/<\/script>/gi, '<\\/script>');
 
   const preloadScript = `<script>window.__PRELOADED__=${dataJson};<\/script>`;
