@@ -1360,17 +1360,17 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
       if (v) vals.push(v.toLowerCase());
     }
 
-    // DEPT: question mentions "business unit" or "department", not the cross-dept frequency question
+    // DEPT: question mentions "business unit", "department", or "division", not the cross-dept frequency question
     if (!deptFound &&
-        (qt.includes('business unit') || qt.includes('department')) &&
-        !qt.includes('most frequent') && !qt.includes('work with')) {
+        (qt.includes('business unit') || qt.includes('department') || qt.includes('division')) &&
+        !qt.includes('most frequent') && !qt.includes('work with') && !qt.includes('cross')) {
       C.DEPT = code.trim(); deptFound = true;
     }
     // DEPT value-based fallback — only for single-header CSVs where question text is unavailable.
     // Org unit columns contain division/department/bureau/section words; location columns end in ", XX" (city, state).
     if (!deptFound && isSingleHeader && vals.length >= 2) {
       const looksLikeLocation = vals.some(v => /,\s*[a-z]{2}$/.test(v));
-      const looksLikeOrgUnit  = vals.some(v => /\b(division|department|bureau|section)\b/.test(v));
+      const looksLikeOrgUnit  = vals.some(v => /\b(division|department|bureau|section|group|office)\b/.test(v));
       if (looksLikeOrgUnit && !looksLikeLocation) { C.DEPT = code.trim(); deptFound = true; }
     }
 
