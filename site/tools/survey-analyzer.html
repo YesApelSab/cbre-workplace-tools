@@ -769,6 +769,20 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
     </div>
   </div>
 
+  <!-- UPLOAD DIAGNOSTICS SCREEN -->
+  <div id="diagScreen" style="display:none;min-height:100vh;align-items:flex-start;justify-content:center;padding:2rem;overflow-y:auto">
+    <div style="width:100%;max-width:880px;padding:1rem 0 4rem">
+      <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:rgba(23,232,143,0.6);margin-bottom:0.5rem">Upload Diagnostics</div>
+      <h2 style="font-size:1.5rem;font-weight:700;color:var(--text);margin:0 0 0.35rem">Column Coverage Review</h2>
+      <p style="font-size:0.85rem;color:var(--text-muted);margin:0 0 1.75rem">Review before presenting to a client. Green = fully matched, amber = partial, red = no data found. Unrecognized columns at the bottom are being silently ignored — add them as Custom Questions if they should appear.</p>
+      <div id="diagContent"></div>
+      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-top:2rem;padding-top:1.5rem;border-top:1px solid rgba(242,244,243,0.1)">
+        <button onclick="proceedFromDiagnostics()" style="background:#17E88F;color:#001A14;border:none;border-radius:8px;padding:0.75rem 2rem;font-size:0.95rem;font-weight:700;cursor:pointer">Open Dashboard →</button>
+        <button onclick="backFromDiagnostics()" style="background:none;border:1px solid rgba(242,244,243,0.15);border-radius:8px;padding:0.75rem 1.25rem;font-size:0.95rem;color:var(--text-muted);cursor:pointer">← Revise mapping</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MAIN APP -->
   <div class="app-layout" id="appLayout">
 
@@ -790,6 +804,7 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
       <button class="tab-btn" data-tab="sentiment">Sentiment Analysis</button>
       <div class="tab-sep"></div>
       <button onclick="showCustomQuestionsPanel()" style="width:100%;text-align:left;background:none;border:1px dashed rgba(23,232,143,0.3);border-radius:6px;padding:0.5rem 0.75rem;font-size:0.74rem;color:rgba(23,232,143,0.7);cursor:pointer;font-family:inherit;margin-top:0.5rem">⚙ Custom Questions</button>
+      <button onclick="reopenDiagnostics()" style="width:100%;text-align:left;background:none;border:1px dashed rgba(242,244,243,0.15);border-radius:6px;padding:0.5rem 0.75rem;font-size:0.74rem;color:var(--text-muted);cursor:pointer;font-family:inherit;margin-top:0.4rem">📋 Upload Diagnostics</button>
     </div>
 
     <!-- CONTENT AREA -->
@@ -1007,6 +1022,7 @@ const L5_LABELS = ['Strongly Disagree','Disagree','Agree','Strongly Agree'];
 const L5_COLORS = ['#8B1A1A','#D2785A','#17E88F','#003F2D'];
 
 // ─── STATE ────────────────────────────────────────────────────────────────────
+let obenWasAutoDetected = false;
 let allRows = [];
 let colIdx = {};
 let filteredRows = [];
@@ -1364,6 +1380,7 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     if (rbenDet.length) C.RBEN = rbenDet;
   }
 
+  obenWasAutoDetected = false;
   // OBEN: detect if ALL default office-benefit columns are absent from this CSV
   if (C.OBEN.every(code => colIdx[code] === undefined)) {
     const obenDet = [];
@@ -1419,6 +1436,7 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
         if (fillIdx < 9) { sorted[fillIdx] = col; fillIdx++; }
       });
       C.OBEN = sorted;
+      obenWasAutoDetected = true;
     }
   }
 
@@ -1707,12 +1725,215 @@ function confirmColumnMapping() {
   try { localStorage.setItem(cmapStorageKey(''), JSON.stringify(mapping)); } catch(e) {}
 
   document.getElementById('columnMappingScreen').style.display = 'none';
-  initApp();
+  showDiagnosticsScreen();
 }
 
 function cancelColumnMapping() {
   document.getElementById('columnMappingScreen').style.display = 'none';
   document.getElementById('uploadScreen').style.display = '';
+}
+
+// ─── UPLOAD DIAGNOSTICS ───────────────────────────────────────────────────────
+function buildDiagnostics() {
+  const SECTIONS = [
+    { name: 'Space Supply',          cols: C.SSUPPLY, labels: C.SSUPPLY_L },
+    { name: 'Space Function',        cols: C.SFUNC,   labels: C.SFUNC_L },
+    { name: 'Space Design',          cols: C.SDES,    labels: C.SDES_L },
+    { name: 'Noise Sources',         cols: C.Q20,     labels: C.Q20_L },
+    { name: 'Relationships',         cols: C.REL,     labels: C.REL_L },
+    { name: 'Learning',              cols: C.LEARN,   labels: C.LEARN_L },
+    { name: 'Social',                cols: C.SOC,     labels: C.SOC_L },
+    { name: 'Hosting',               cols: C.HOST,    labels: C.HOST_L },
+    { name: 'Value of Place (WVP)',  cols: C.WVP,     labels: C.WVP_L },
+    { name: 'Trade-offs',            cols: C.TRADE,   labels: C.TRADE_L },
+    { name: 'Amenities',             cols: C.AMM,     labels: C.AMM_L },
+    { name: 'Office Benefits (OBEN)',cols: C.OBEN,    labels: C.OBEN_L },
+    { name: 'Return Barriers (RBEN)',cols: C.RBEN,    labels: C.RBEN_L },
+  ];
+
+  const sections = SECTIONS.map(({ name, cols, labels }) => {
+    if (!Array.isArray(cols)) return { name, found: 0, total: 0, missing: [] };
+    let found = 0, total = 0;
+    const missing = [];
+    cols.forEach((c, i) => {
+      if (!c) return;
+      total++;
+      if (colIdx[c] !== undefined) {
+        found++;
+      } else {
+        const lbl = (labels && labels[i]) || qTextsMap[c] || c;
+        missing.push(typeof lbl === 'string' ? (lbl.length > 85 ? lbl.slice(0, 85) + '…' : lbl) : c);
+      }
+    });
+    return { name, found, total, missing };
+  });
+
+  const SINGLES = [
+    { name: 'eNPS',                  code: C.ENPS },
+    { name: 'Satisfaction score',    code: C.SAT },
+    { name: 'Dept / Business Unit',  code: C.DEPT },
+    { name: 'Role / Level',          code: C.ROLE },
+    { name: 'Generation',            code: C.GEN },
+    { name: 'Tenure',                code: C.TENURE },
+    { name: 'Office Frequency',      code: C.FREQOFF },
+    { name: 'Days/wk — current',     code: C.Q11 },
+    { name: 'Days/wk — ideal',       code: C.Q12 },
+    { name: 'Cross-team collab (Q13)',code: Array.isArray(C.Q13) && C.Q13.length ? C.Q13[0] : null },
+    { name: 'Hybrid Meetings',       code: C.HYBMTG },
+    { name: 'Commute Time',          code: C.COMMUTE },
+  ].map(({ name, code }) => ({ name, found: !!code && colIdx[code] !== undefined, code: code || null }));
+
+  const OBEN_SLOT_NAMES = ['Team Gatherings','Leadership Visibility','Communications','Work-life Balance','Colleague Connections','Technology / Equipment','Fewer Distractions','Private Workspace','Workspace Configuration'];
+  const OBEN_DIM_NAMES  = ['Exposure','Exposure','Teamwork','Experience','Teamwork','Functionality','Experience','Experience','Functionality'];
+  const obenSlots = C.OBEN.map((code, i) => ({
+    slotName: OBEN_SLOT_NAMES[i] || `Slot ${i}`,
+    dim: OBEN_DIM_NAMES[i] || '—',
+    code,
+    label: code ? (qTextsMap[code] || code).slice(0, 95) : null,
+    found: !!code && colIdx[code] !== undefined
+  }));
+
+  const claimedCodes = new Set(Object.values(C).flatMap(v =>
+    typeof v === 'string' ? [v] : Array.isArray(v) ? v.filter(x => typeof x === 'string') : []
+  ));
+  writeInCols.forEach(({ code }) => claimedCodes.add(code));
+  extraDemoColumns.forEach(({ code }) => claimedCodes.add(code));
+
+  const unrecognized = Object.keys(colIdx)
+    .filter(code => !claimedCodes.has(code))
+    .map(code => ({ code, label: (qTextsMap[code] || '').slice(0, 100) }));
+
+  return { n: allRows.length, sections, singles: SINGLES, obenAutoDetected: obenWasAutoDetected, obenSlots, writeIns: writeInCols, unrecognized };
+}
+
+function showDiagnosticsScreen() {
+  const diag = buildDiagnostics();
+  const el = document.getElementById('diagScreen');
+  const okSections = diag.sections.filter(s => s.total > 0 && s.found === s.total).length;
+  const warnSections = diag.sections.filter(s => s.total > 0 && s.found > 0 && s.found < s.total).length;
+  const emptySections = diag.sections.filter(s => s.total > 0 && s.found === 0).length;
+
+  const dot = (color) => `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${color};margin-right:6px;flex-shrink:0"></span>`;
+
+  // Section coverage rows
+  const secRows = diag.sections.map(s => {
+    if (s.total === 0) return '';
+    const pct = s.found / s.total;
+    const color = pct === 1 ? '#17E88F' : pct === 0 ? '#E84C4C' : '#F5A623';
+    const status = pct === 1 ? '✓ Full' : pct === 0 ? '✗ None found' : `${s.found}/${s.total}`;
+    const missingHtml = s.missing.length ? `<div style="margin-top:0.35rem;padding-left:1.1rem">
+      ${s.missing.map(m => `<div style="font-size:0.75rem;color:rgba(210,120,90,0.85);line-height:1.5">− ${esc(m)}</div>`).join('')}
+    </div>` : '';
+    return `<div style="display:flex;align-items:baseline;gap:0.75rem;padding:0.5rem 0;border-bottom:1px solid rgba(242,244,243,0.06)">
+      <div style="display:flex;align-items:center;min-width:210px">${dot(color)}<span style="font-size:0.82rem;color:var(--text)">${esc(s.name)}</span></div>
+      <span style="font-size:0.78rem;color:${color};font-weight:600;min-width:90px">${status}</span>
+      ${missingHtml ? `<div style="flex:1">${missingHtml}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  // Singles
+  const singlesHtml = diag.singles.map(s => {
+    const color = s.found ? '#17E88F' : '#888';
+    return `<div style="display:flex;align-items:center;gap:0.5rem;padding:0.3rem 0">
+      ${dot(color)}<span style="font-size:0.8rem;color:${s.found ? 'var(--text)' : 'var(--text-muted)'}">
+        ${esc(s.name)}${!s.found ? ' <em style="color:#888;font-style:normal">(not found)</em>' : ''}
+      </span>
+    </div>`;
+  }).join('');
+
+  // OBEN slots (only when auto-detected)
+  const obenHtml = diag.obenAutoDetected ? `
+    <div style="margin-top:1.5rem;background:rgba(245,166,35,0.07);border:1px solid rgba(245,166,35,0.25);border-radius:10px;padding:1rem 1.25rem">
+      <div style="font-size:0.72rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#F5A623;margin-bottom:0.6rem">⚠ Office Benefits — auto-detected (verify slots)</div>
+      <p style="font-size:0.8rem;color:var(--text-muted);margin:0 0 0.75rem">Standard OBEN column codes weren't found in this CSV. The tool matched questions by keyword and assigned them to dimension slots below. Confirm the assignments are correct before presenting.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem">
+        ${diag.obenSlots.map(s => {
+          const color = s.found ? 'var(--text)' : '#666';
+          const badge = `<span style="font-size:0.68rem;background:rgba(23,232,143,0.1);color:rgba(23,232,143,0.6);border-radius:3px;padding:0.1rem 0.35rem;margin-left:4px">${esc(s.dim)}</span>`;
+          return `<div style="font-size:0.78rem;color:${color};line-height:1.5">
+            <span style="color:var(--text-muted)">${esc(s.slotName)}</span>${badge}<br>
+            <span style="padding-left:0.5rem;font-size:0.74rem;color:${s.found ? 'rgba(23,232,143,0.7)' : '#E84C4C'}">${s.label ? esc(s.label) : '<em>— unassigned —</em>'}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : '';
+
+  // Write-ins
+  const writeInsHtml = diag.writeIns.length ? `
+    <div style="margin-top:0.75rem;font-size:0.8rem;color:var(--text-muted)">
+      <strong style="color:var(--text)">Free-text "Other" columns detected (${diag.writeIns.length}):</strong>
+      ${diag.writeIns.map(w => `<span style="display:inline-block;background:rgba(255,255,255,0.06);border-radius:4px;padding:0.15rem 0.5rem;margin:0.2rem 0.2rem 0 0;font-size:0.75rem">${esc(w.label || w.code)}</span>`).join('')}
+    </div>` : '';
+
+  // Unrecognized columns — the most important callout
+  const unrecoHtml = diag.unrecognized.length ? `
+    <div style="margin-top:1.5rem;background:rgba(232,76,76,0.07);border:1px solid rgba(232,76,76,0.25);border-radius:10px;padding:1rem 1.25rem">
+      <div style="font-size:0.72rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#E84C4C;margin-bottom:0.5rem">✗ Unrecognized columns — not shown anywhere (${diag.unrecognized.length})</div>
+      <p style="font-size:0.8rem;color:var(--text-muted);margin:0 0 0.75rem">These columns are in the CSV but don't map to any standard or auto-detected question. They will be silently ignored. If any of these should appear on the dashboard, add them as Custom Questions (⚙ in the sidebar) after loading.</p>
+      <div style="display:flex;flex-direction:column;gap:0.3rem;max-height:260px;overflow-y:auto">
+        ${diag.unrecognized.map(u => `<div style="display:flex;gap:0.75rem;font-size:0.78rem;padding:0.25rem 0;border-bottom:1px solid rgba(242,244,243,0.06)">
+          <span style="color:#E84C4C;min-width:160px;word-break:break-all;flex-shrink:0">${esc(u.code)}</span>
+          <span style="color:var(--text-muted)">${u.label ? esc(u.label) : '<em>no question text</em>'}</span>
+        </div>`).join('')}
+      </div>
+    </div>` : `<div style="margin-top:1rem;font-size:0.82rem;color:rgba(23,232,143,0.7)">✓ All CSV columns are accounted for — nothing is being silently ignored.</div>`;
+
+  document.getElementById('diagContent').innerHTML = `
+    <div style="margin-bottom:1.5rem;display:flex;gap:1.25rem;flex-wrap:wrap">
+      <div style="background:rgba(23,232,143,0.08);border:1px solid rgba(23,232,143,0.2);border-radius:8px;padding:0.6rem 1rem;text-align:center">
+        <div style="font-size:1.5rem;font-weight:700;color:#17E88F">${diag.n.toLocaleString()}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">Responses loaded</div>
+      </div>
+      <div style="background:rgba(23,232,143,0.08);border:1px solid rgba(23,232,143,0.2);border-radius:8px;padding:0.6rem 1rem;text-align:center">
+        <div style="font-size:1.5rem;font-weight:700;color:#17E88F">${okSections}/${diag.sections.filter(s=>s.total>0).length}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">Sections fully matched</div>
+      </div>
+      ${warnSections > 0 ? `<div style="background:rgba(245,166,35,0.08);border:1px solid rgba(245,166,35,0.2);border-radius:8px;padding:0.6rem 1rem;text-align:center">
+        <div style="font-size:1.5rem;font-weight:700;color:#F5A623">${warnSections}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">Partial sections</div>
+      </div>` : ''}
+      ${emptySections > 0 ? `<div style="background:rgba(232,76,76,0.08);border:1px solid rgba(232,76,76,0.2);border-radius:8px;padding:0.6rem 1rem;text-align:center">
+        <div style="font-size:1.5rem;font-weight:700;color:#E84C4C">${emptySections}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">Sections empty</div>
+      </div>` : ''}
+      ${diag.unrecognized.length > 0 ? `<div style="background:rgba(232,76,76,0.08);border:1px solid rgba(232,76,76,0.2);border-radius:8px;padding:0.6rem 1rem;text-align:center">
+        <div style="font-size:1.5rem;font-weight:700;color:#E84C4C">${diag.unrecognized.length}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted)">Unrecognized columns</div>
+      </div>` : ''}
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;margin-bottom:1.5rem;align-items:start">
+      <div>
+        <div style="font-size:0.72rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.5rem">Section Coverage</div>
+        ${secRows}
+      </div>
+      <div>
+        <div style="font-size:0.72rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.5rem">Key Columns</div>
+        ${singlesHtml}
+        ${writeInsHtml}
+      </div>
+    </div>
+
+    ${obenHtml}
+    ${unrecoHtml}
+  `;
+
+  el.style.display = 'flex';
+}
+
+function proceedFromDiagnostics() {
+  document.getElementById('diagScreen').style.display = 'none';
+  initApp();
+}
+
+function backFromDiagnostics() {
+  document.getElementById('diagScreen').style.display = 'none';
+  document.getElementById('columnMappingScreen').style.display = 'flex';
+}
+
+function reopenDiagnostics() {
+  if (!allRows.length) return;
+  showDiagnosticsScreen();
 }
 
 function checkColumns() {
