@@ -1448,12 +1448,14 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
   });
   // Also pick up sibling columns (same code prefix, numeric suffix) whose row-1 text
   // is empty — Key Survey sometimes omits the question text for 2nd/3rd rank columns.
+  // Handles separators: _ - . and also no separator (e.g. COLLAB1, COLLAB2).
   if (q13Detected.length) {
     const q13Set = new Set(q13Detected);
     q13Detected.forEach(detected => {
-      const m = detected.match(/^(.+[_\-])(\d+)$/);
+      // Try separator-based pattern first (_N, -N, .N), then bare suffix (CODENNN)
+      const m = detected.match(/^(.+[_\-\.])(\d+)$/) || detected.match(/^([A-Za-z][A-Za-z_\-\.]*?)(\d+)$/);
       if (!m) return;
-      const [, prefix] = m;
+      const prefix = m[1];
       codes.forEach(code => {
         const c = (code || '').trim();
         if (!c || q13Set.has(c)) return;
@@ -3430,11 +3432,14 @@ function renderRel() {
       C.Q13.forEach(col => {
         const v = gv(r, col);
         if (!v || !v.trim() || v.trim() === '0') return;
+        // Skip N/A option columns (respondent doesn't collaborate cross-team)
+        const optLabel = colMetaMap[col] || '';
+        if (/^n\/a\b|do not often|don.t often/i.test(optLabel)) return;
         const rawV = v.trim();
         let keys;
         if (rawV === '1' || rawV.toLowerCase() === 'yes' || rawV.toLowerCase() === 'true') {
           // Binary checkbox indicator — use row-2 option label, then question text, then code
-          keys = [colMetaMap[col] || qTextsMap[col] || col];
+          keys = [optLabel || qTextsMap[col] || col];
         } else {
           // Text value — may be semicolon/pipe/comma-separated multi-select
           keys = rawV.split(/\s*[;|]\s*/).map(s => s.trim()).filter(Boolean);
