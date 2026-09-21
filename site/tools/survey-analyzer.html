@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,300&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 :root {
   --green: #003F2D;
@@ -553,6 +554,54 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
 .export-step-body code { background: rgba(255,255,255,0.08); border-radius: 3px; padding: 0.1em 0.35em; font-size: 0.78em; color: var(--accent); font-family: monospace; }
 .export-not { color: #F96167; font-weight: 600; font-style: normal; }
 
+/* PRE-LAUNCH CHECK */
+.prelaunch-section {
+  border: 1.5px solid rgba(255,197,61,0.4);
+  border-radius: var(--radius);
+  background: rgba(255,197,61,0.05);
+  padding: 1.25rem 1.4rem;
+  margin-bottom: 1.5rem;
+}
+.prelaunch-header { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.35rem; }
+.prelaunch-badge {
+  font-size: 0.62rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
+  background: rgba(255,197,61,0.2); color: rgba(255,197,61,0.95);
+  border: 1px solid rgba(255,197,61,0.35); border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+}
+.prelaunch-title { font-size: 0.88rem; font-weight: 700; color: var(--text); }
+.prelaunch-desc { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.9rem; line-height: 1.55; }
+.prelaunch-upload { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.prelaunch-upload-btn {
+  background: rgba(255,197,61,0.15); border: 1px solid rgba(255,197,61,0.35);
+  color: rgba(255,197,61,0.95); border-radius: 7px;
+  padding: 0.45rem 1rem; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+  transition: background 0.15s;
+}
+.prelaunch-upload-btn:hover { background: rgba(255,197,61,0.25); }
+.prelaunch-upload-hint { font-size: 0.72rem; color: var(--text-muted); }
+.prelaunch-results { margin-top: 1rem; display: none; }
+.prelaunch-results-header { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.6rem; }
+.prelaunch-row {
+  display: flex; gap: 0.75rem; align-items: flex-start;
+  padding: 0.6rem 0.75rem; border-radius: 6px; margin-bottom: 0.4rem;
+  font-size: 0.8rem;
+}
+.prelaunch-row.high { background: rgba(249,97,103,0.1); border-left: 3px solid #F96167; }
+.prelaunch-row.med  { background: rgba(255,197,61,0.08); border-left: 3px solid rgba(255,197,61,0.7); }
+.prelaunch-row.low  { background: rgba(23,232,143,0.06); border-left: 3px solid rgba(23,232,143,0.4); }
+.prelaunch-row-badge { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.06em; border-radius: 3px; padding: 0.1rem 0.4rem; flex-shrink: 0; margin-top: 1px; }
+.prelaunch-row.high .prelaunch-row-badge { background: #F96167; color: #fff; }
+.prelaunch-row.med  .prelaunch-row-badge { background: rgba(255,197,61,0.8); color: #001A14; }
+.prelaunch-row.low  .prelaunch-row-badge { background: rgba(23,232,143,0.5); color: #001A14; }
+.prelaunch-row-body { flex: 1; }
+.prelaunch-row-q { font-weight: 600; color: var(--text); }
+.prelaunch-row-request { color: rgba(255,197,61,0.85); font-style: italic; margin: 0.1rem 0; }
+.prelaunch-row-flag { color: var(--text-muted); font-size: 0.75rem; }
+.prelaunch-clear { font-size: 0.72rem; color: var(--text-muted); cursor: pointer; text-decoration: underline; margin-left: auto; }
+.prelaunch-clear:hover { color: var(--text); }
+.prelaunch-ok { font-size: 0.8rem; color: rgba(23,232,143,0.8); padding: 0.5rem 0; }
+
 .upload-compact {
   display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
   background: var(--card-bg);
@@ -702,7 +751,7 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
         </div>
         <div class="export-step">
           <div class="export-step-num">5</div>
-          <div class="export-step-body">Click <strong>Export to CSV</strong>. Do <span class="export-not">not</span> open or edit the file before uploading — the three header rows (codes, question text, metadata) must stay intact.</div>
+          <div class="export-step-body">Click <strong>Export to CSV</strong>. Do <span class="export-not">not</span> edit the file before uploading — the three header rows (codes, question text, metadata) must stay intact.</div>
         </div>
       </div>
     </div>
@@ -735,6 +784,21 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
         </div>
       </div>
     </details>
+
+    <!-- PRE-LAUNCH CHECK -->
+    <div class="prelaunch-section">
+      <div class="prelaunch-header">
+        <span class="prelaunch-badge">Pre-Launch</span>
+        <span class="prelaunch-title">Alignment Form Check</span>
+      </div>
+      <p class="prelaunch-desc">Before the survey goes live — upload the completed alignment form (Excel) with client change requests noted in the <strong>Client Request / Notes</strong> column. The tool will flag any changes that could break the dashboard.</p>
+      <div class="prelaunch-upload">
+        <input type="file" id="prelaunch-input" accept=".xlsx" style="display:none" onchange="runPrelaunchCheck(this)">
+        <button class="prelaunch-upload-btn" onclick="document.getElementById('prelaunch-input').click()">Upload Alignment Form (.xlsx)</button>
+        <span class="prelaunch-upload-hint">Uses the Client Request / Notes column (column K) from the WX Survey Alignment Form tab</span>
+      </div>
+      <div class="prelaunch-results" id="prelaunchResults"></div>
+    </div>
 
     <!-- Upload zone (compact) -->
     <div class="upload-compact" id="uploadZone">
@@ -1506,41 +1570,32 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
   });
 
   // allCategoricalColumns = every categorical column in the CSV (for the "Add Filter" picker)
+  // Skip columns that are section-array data (Likert, supply, checkbox grids) — not filterable.
+  // Allow ALL other columns including demo columns, so any question (office assignment, etc.) can be a filter.
   allCategoricalColumns = [];
-  const strictClaimed = new Set(Object.values(C).reduce((acc, v) => {
-    if (typeof v === 'string') acc.push(v);
-    else if (Array.isArray(v)) v.forEach(x => { if (typeof x === 'string') acc.push(x); });
-    return acc;
-  }, []));
+  const sectionArrayCodes = new Set([
+    ...C.SSUPPLY, ...C.SFUNC, ...C.SDES, ...C.VIBE,
+    ...C.REL, ...C.LEARN, ...C.SOC, ...C.HOST, ...C.WVP,
+    ...C.TRADE, ...C.AMM, ...C.Q20, ...C.RBEN, ...C.OBEN,
+    ...(Array.isArray(C.Q13) ? C.Q13 : []),
+    C.TIME_I, C.TIME_O, C.COL_S, C.COL_U, C.MTG_S, C.MTG_M, C.MTG_L,
+    C.SAT, C.ENPS, C.Q42, C.Q43, C.Q45, C.Q26, C.Q31, C.Q32, C.Q34, C.Q51,
+    C.WKSCHED, C.LUNFREQ, C.LUNLOCAL, C.TECHNEED,
+  ].filter(x => typeof x === 'string'));
   codes.forEach((code, i) => {
     if (!code || !code.trim()) return;
     const c2 = code.trim();
-    if (strictClaimed.has(c2)) return;
-    const qt2 = (qTexts[i] || '').trim();
-    if (!qt2 || qt2.length < 5) return;
+    if (sectionArrayCodes.has(c2)) return;
+    const qt2 = (qTexts[i] || '').trim() || c2;
     const uniq2 = new Set();
     for (let j = 0; j < dataRows.length; j++) {
       const v = (dataRows[j][i] || '').trim();
       if (v) uniq2.add(v);
     }
-    if (uniq2.size < 2 || uniq2.size > 25) return;
+    if (uniq2.size < 2 || uniq2.size > 30) return;
     const vals3 = [...uniq2];
     if (vals3.every(v => /^[\d.,%-]+$/.test(v))) return;
     allCategoricalColumns.push({ code: c2, label: qt2, vals: vals3.sort() });
-  });
-  // Also include known categorical columns (Q11, Q12, Q15, COMMUTE, HYBMTG) in the Add Filter picker
-  // so users can filter by workspace type, office assignment, commute mode, etc.
-  [C.Q11, C.Q12, C.Q15, C.COMMUTE, C.HYBMTG].forEach(code => {
-    if (!code || typeof code !== 'string' || colIdx[code] === undefined) return;
-    if (allCategoricalColumns.some(c => c.code === code)) return;
-    const ci = colIdx[code];
-    const qt2 = qTextsMap[code] || code;
-    const uniqK = new Set();
-    dataRows.forEach(r => { const v = (r[ci] || '').trim(); if (v) uniqK.add(v); });
-    if (uniqK.size < 2 || uniqK.size > 25) return;
-    const valsK = [...uniqK];
-    if (valsK.every(v => /^[\d.,%-]+$/.test(v))) return;
-    allCategoricalColumns.push({ code, label: qt2, vals: valsK.sort() });
   });
 
   // Write-in verbatim columns: free-text "Other (specify)" companions
@@ -1554,9 +1609,12 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     const c3 = code.trim();
     if (allClaimedForWriteIn.has(c3)) return;
     const qt3 = (qTexts[i] || '').toLowerCase();
+    // Also detect by column code suffix: QUESTION.OTHER, QUESTION.SPEC, QUESTION.OSPEC, QUESTION.WRITEOTHER etc.
+    const codeLower = c3.toLowerCase();
     const looksLikeWriteIn =
-      (qt3.includes('other') && (qt3.includes('specify') || qt3.includes('please') || qt3.includes('write'))) ||
-      qt3.includes('if other') || qt3.includes('please specify') || qt3.includes('write-in') || qt3.includes('write in');
+      (qt3.includes('other') && (qt3.includes('specify') || qt3.includes('please') || qt3.includes('write') || qt3.includes('describe') || qt3.includes('explain'))) ||
+      qt3.includes('if other') || qt3.includes('please specify') || qt3.includes('write-in') || qt3.includes('write in') || qt3.includes('open ended') || qt3.includes('open-ended') ||
+      /[._]other$/i.test(c3) || /[._]spec(ify)?$/i.test(c3) || /[._]ospec$/i.test(c3) || /[._](write|writein|writeother)$/i.test(c3);
     if (!looksLikeWriteIn) return;
     const responses = [];
     for (let j = 0; j < dataRows.length; j++) {
@@ -2151,13 +2209,13 @@ function showAddFilterPicker(btn) {
   // Remove any existing picker
   const existing = document.getElementById('addFilterPicker');
   if (existing) { existing.remove(); return; }
-  // Columns already shown in filter bar
+  // Columns already shown: the 5 standard demographic filters + any extras already added
   const shownCodes = new Set([
-    ...['fDept','fRole','fGen','fTenure','fFreq'].map(() => null), // standard filters always shown
+    C.DEPT, C.ROLE, C.GEN, C.TENURE, C.FREQOFF,
     ...extraDemoColumns.map(e => e.code),
   ].filter(Boolean));
   const available = allCategoricalColumns.filter(c => !shownCodes.has(c.code));
-  if (!available.length) { btn.textContent = 'No more filters'; setTimeout(() => { btn.textContent = '+ Add Filter'; }, 1800); return; }
+  if (!available.length) { btn.textContent = 'All questions added'; setTimeout(() => { btn.textContent = '+ Add Filter'; }, 2000); return; }
   const picker = document.createElement('div');
   picker.id = 'addFilterPicker';
   picker.style.cssText = 'position:absolute;z-index:999;background:var(--sidebar);border:1px solid var(--card-border);border-radius:8px;padding:0.5rem;box-shadow:0 4px 20px rgba(0,0,0,0.4);min-width:280px;max-height:320px;overflow-y:auto';
@@ -2533,9 +2591,10 @@ function stackedBar(label, d, t, a, lblClass, orgAvg) {
   }));
   const track = buildStackedTrack(segData);
   const orgStr = (orgAvg != null)
-    ? `<span style="font-size:0.67rem;color:var(--text-muted);margin-left:2px">org ${orgAvg.toFixed(1)}</span>`
+    ? `<span style="font-size:0.67rem;color:var(--text-muted);margin-left:4px">co. avg ${orgAvg.toFixed(1)}</span>`
     : '';
-  return `<div class="bar-row"><span class="${lblClass}" title="${label}">${label}</span>${track}<span class="bar-avg">${a !== null ? `avg ${a.toFixed(1)}/4` : '—'}${orgStr}</span></div>`;
+  const avgColor = orgAvg != null ? 'color:#17E88F;' : '';
+  return `<div class="bar-row"><span class="${lblClass}" title="${label}">${label}</span>${track}<span class="bar-avg" style="${avgColor}">${a !== null ? `avg ${a.toFixed(1)}/4` : '—'}${orgStr}</span></div>`;
 }
 
 function supplyBar(label, c) {
@@ -4489,7 +4548,7 @@ function renderSentiment() {
 
   // ── Stat cards ────────────────────────────────────────────────────────
   if (!hasScoreData) {
-    html += `<div class="chart-card" style="margin-bottom:0.9rem;border-color:rgba(23,232,143,0.18)"><div style="font-size:0.82rem;color:var(--text-muted)"><strong style="color:var(--text)">Engagement scoring unavailable</strong> — no eNPS or satisfaction question was detected in this survey. Engagement pyramid and tier analysis are hidden. Open-ended responses appear below if present.</div></div>`;
+    html += `<div class="chart-card" style="margin-bottom:0.9rem;border-color:rgba(23,232,143,0.18)"><div style="font-size:0.82rem;color:var(--text-muted)"><strong style="color:var(--text)">Engagement scoring omitted</strong> — eNPS and satisfaction questions were not included in this survey. The engagement pyramid and tier analysis are disabled. Open-ended responses are shown below.</div></div>`;
   } else {
   html += `<div class="sent-stat-row">
     <div class="sent-stat-card">
@@ -5507,6 +5566,134 @@ function downloadClientPackage() {
   })();
 }
 
+// ── PRE-LAUNCH ALIGNMENT CHECK ──────────────────────────────────────────────
+const PRELAUNCH_SENSITIVITY = {
+  'Q3':  {risk:'MED',  label:'Department / Business Unit',            flag:'Removing this question drops the department filter from the dashboard.'},
+  'Q4':  {risk:'MED',  label:'Job Role / Level',                      flag:'Removing this question drops the role filter from the dashboard.'},
+  'Q5':  {risk:'LOW',  label:'Generation / Age Band',                 flag:'Removing this question drops the generation filter.'},
+  'Q6':  {risk:'MED',  label:'Tenure at Organization',                flag:'Removing this question drops the tenure filter.'},
+  'Q7':  {risk:'HIGH', label:'Office Frequency',                      flag:'HIGH RISK — must keep "Never" and "Every day" or "5 days" in option text. These anchor the frequency chart and remote/in-office filter. Scale or option changes can break sorting.'},
+  'Q8':  {risk:'MED',  label:'Typical Work Schedule',                 flag:'Removing drops the Work Styles schedule chart.'},
+  'Q9':  {risk:'MED',  label:'Primary Work Location',                 flag:'Removing drops the location filter.'},
+  'Q10': {risk:'MED',  label:'Most Common Work Location (this month)',flag:'Removing drops the monthly location filter.'},
+  'Q11': {risk:'MED',  label:'Assigned Workspace',                    flag:'Removing drops the assigned workspace filter.'},
+  'Q12': {risk:'MED',  label:'Primary Work Setting',                  flag:'Removing drops the work setting filter.'},
+  'Q13': {risk:'MED',  label:'Cross-Team Collaboration',              flag:'Removing drops the cross-team chart.'},
+  'Q14': {risk:'LOW',  label:'Commute Time',                          flag:'Removing drops the commute time filter.'},
+  'Q15': {risk:'LOW',  label:'Commute Mode',                          flag:'Removing drops the commute mode filter.'},
+  'Q16': {risk:'LOW',  label:'Nearest Rail / Metro',                  flag:'Not shown on dashboard — no impact.'},
+  'Q18': {risk:'HIGH', label:'Space Supply (8 space types)',           flag:'HIGH RISK — grid question. Removing rows drops those bars. Adding rows requires a tool update. Do not restructure.'},
+  'Q19': {risk:'HIGH', label:'Space Functionality (11 attributes)',   flag:'HIGH RISK — same as Q18. Each row is a separate bar.'},
+  'Q20': {risk:'MED',  label:'Noise Distraction Sources',             flag:'Removing this question drops the noise sources chart entirely.'},
+  'Q21': {risk:'LOW',  label:'Lunch Frequency',                       flag:'Removing drops lunch frequency data.'},
+  'Q22': {risk:'LOW',  label:'Lunch Location',                        flag:'Not currently shown on dashboard — no impact.'},
+  'Q23': {risk:'HIGH', label:'Space Design (8 attributes)',            flag:'HIGH RISK — same as Q18. Each row is a separate bar.'},
+  'Q24': {risk:'MED',  label:'Office Vibe Preference',                flag:'Removing drops the vibe preference chart.'},
+  'Q25': {risk:'LOW',  label:'Technology Needs',                      flag:'Not currently shown on dashboard.'},
+  'Q26': {risk:'LOW',  label:'Special Space Requirements',            flag:'Not currently shown on dashboard.'},
+  'Q28': {risk:'MED',  label:'Time Split: Individual vs. Collaborative', flag:'Removing drops the time allocation chart.'},
+  'Q29': {risk:'MED',  label:'Collaboration: Scheduled vs. Unscheduled', flag:'Removing drops the collaboration type chart.'},
+  'Q30': {risk:'MED',  label:'Meeting Size Distribution',             flag:'Removing drops the meeting size chart.'},
+  'Q31': {risk:'LOW',  label:'Manager In-Office Frequency',           flag:'Not currently shown on dashboard.'},
+  'Q32': {risk:'LOW',  label:'Collaboration Challenges (open-ended)', flag:'Removing drops the verbatim section from the Relationships tab.'},
+  'Q33': {risk:'HIGH', label:'Relationship Quality (4-pt scale)',     flag:'HIGH RISK — must stay 4-point scale. Scale change produces wrong scores. Removing dimensions drops those bars.'},
+  'Q34': {risk:'MED',  label:'Meaningful Hallway Encounters',         flag:'Options must include Always / Often / Occasionally / Rarely — significant renaming breaks bar labels.'},
+  'Q35': {risk:'HIGH', label:'Learning Opportunities (multi-select)', flag:'HIGH RISK — must stay multi-select. Removing drops the entire Learning section.'},
+  'Q36': {risk:'HIGH', label:'Social Opportunities (multi-select)',   flag:'HIGH RISK — must stay multi-select. Removing drops the entire Social section.'},
+  'Q37': {risk:'HIGH', label:'Hosting Activities (multi-select)',     flag:'HIGH RISK — must stay multi-select. Removing drops the entire Hosting section.'},
+  'Q39': {risk:'HIGH', label:'Workplace Value Proposition (4-pt scale)', flag:'HIGH RISK — must stay 4-point scale. Scale change breaks the WVP composite score.'},
+  'Q40': {risk:'HIGH', label:'Overall Workplace Satisfaction (0–10)', flag:'HIGH RISK — must be 0–10. Any scale change breaks the satisfaction score and engagement analysis.'},
+  'Q41': {risk:'HIGH', label:'eNPS — Likelihood to Recommend (0–10)',flag:'CRITICAL — must be 0–10, asked of every respondent with no skip logic. Any scale change or skip logic BREAKS THE WORK PYRAMID entirely.'},
+  'Q42': {risk:'LOW',  label:'What Do You Value Most? (open-ended)', flag:'Removing drops positive verbatim from the Sentiment tab.'},
+  'Q43': {risk:'LOW',  label:'What Makes It Harder? (open-ended)',   flag:'Removing drops negative verbatim from the Sentiment tab.'},
+  'Q45': {risk:'MED',  label:'Preferred Future Work Location',        flag:'Removing drops the future location preference chart.'},
+  'Q46': {risk:'HIGH', label:'Remote-Work Benefits (multi-select)',   flag:'HIGH RISK — must stay multi-select. Removing drops the Remote Barriers section.'},
+  'Q47': {risk:'HIGH', label:'Office Benefits (multi-select)',        flag:'HIGH RISK — removing any of the 9 options triggers keyword-based dimension fallback. Must stay multi-select. Verify in Diagnostics after upload.'},
+  'Q48': {risk:'HIGH', label:'Trade-Off Preference',                  flag:'Removing drops the Trade-offs chart.'},
+  'Q49': {risk:'HIGH', label:'Desired Amenities',                     flag:'Removing drops the Amenities chart.'},
+  'Q50': {risk:'LOW',  label:'Final Comments (open-ended)',           flag:'Removing drops final verbatim from the Sentiment tab.'},
+  'Q51': {risk:'LOW',  label:'Final Comments (open-ended)',           flag:'Removing drops final verbatim from the Sentiment tab.'},
+};
+
+function runPrelaunchCheck(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb = XLSX.read(e.target.result, {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+
+      // Find header row (row index 2 = row 3) and column K index (10)
+      const findings = [];
+      for (let i = 5; i < rows.length; i++) {
+        const row = rows[i];
+        const qcode = String(row[1] || '').trim();  // col B = Key Survey Q#
+        const request = String(row[10] || '').trim(); // col K = Client Request
+        if (!qcode || !request) continue;
+        const sense = PRELAUNCH_SENSITIVITY[qcode];
+        findings.push({
+          qcode,
+          label: sense ? sense.label : 'Custom / Unknown Question',
+          risk: sense ? sense.risk : 'LOW',
+          request,
+          flag: sense ? sense.flag : 'Not a standard dashboard question — verify impact manually.'
+        });
+      }
+
+      const container = document.getElementById('prelaunchResults');
+      container.style.display = 'block';
+
+      if (findings.length === 0) {
+        container.innerHTML = '<p class="prelaunch-ok">✓ No client requests found in column K. Add notes to the alignment form\'s "Client Request / Notes" column and re-upload to run the check.</p>';
+        return;
+      }
+
+      const order = {HIGH:0, MED:1, LOW:2};
+      findings.sort((a,b) => order[a.risk] - order[b.risk]);
+
+      const highCount = findings.filter(f=>f.risk==='HIGH').length;
+      const medCount  = findings.filter(f=>f.risk==='MED').length;
+      const lowCount  = findings.filter(f=>f.risk==='LOW').length;
+
+      let html = `<div class="prelaunch-results-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>${findings.length} request${findings.length!==1?'s':''} flagged
+          ${highCount ? `&nbsp;<span style="color:#F96167;font-weight:700">${highCount} HIGH</span>` : ''}
+          ${medCount  ? `&nbsp;<span style="color:rgba(255,197,61,0.9);font-weight:700">${medCount} MED</span>` : ''}
+          ${lowCount  ? `&nbsp;<span style="color:rgba(23,232,143,0.7);font-weight:700">${lowCount} LOW</span>` : ''}
+        </span>
+        <span class="prelaunch-clear" onclick="clearPrelaunchCheck()">Clear</span>
+      </div>`;
+
+      for (const f of findings) {
+        const cls = f.risk.toLowerCase();
+        html += `<div class="prelaunch-row ${cls}">
+          <span class="prelaunch-row-badge">${f.risk}</span>
+          <div class="prelaunch-row-body">
+            <div class="prelaunch-row-q">${f.qcode} — ${f.label}</div>
+            <div class="prelaunch-row-request">Client request: "${f.request}"</div>
+            <div class="prelaunch-row-flag">${f.flag}</div>
+          </div>
+        </div>`;
+      }
+      container.innerHTML = html;
+    } catch(err) {
+      document.getElementById('prelaunchResults').style.display = 'block';
+      document.getElementById('prelaunchResults').innerHTML = '<p style="color:#F96167;font-size:0.8rem">Could not read the file. Make sure you\'re uploading the WX Survey Alignment Form (.xlsx).</p>';
+    }
+    input.value = '';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function clearPrelaunchCheck() {
+  const c = document.getElementById('prelaunchResults');
+  c.style.display = 'none';
+  c.innerHTML = '';
+}
+// ── END PRE-LAUNCH CHECK ─────────────────────────────────────────────────────
+
 function loadSampleData() {
   document.getElementById('uploadError').style.display = 'none';
 
@@ -5611,7 +5798,7 @@ function loadSampleData() {
 
   const allCsvRows = [cols, cols, cols, ...dataRows];
   const csvText = allCsvRows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
-  if(parseCSV(csvText)) initApp();
+  if(parseCSV(csvText)) showDiagnosticsScreen();
 }
 </script>
 </body>
