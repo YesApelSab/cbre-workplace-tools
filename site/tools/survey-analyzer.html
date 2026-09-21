@@ -1241,6 +1241,16 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
   const dataRows  = rows.slice(dataStart).filter(r => r.some(c => c && c.trim()));
   let deptFound = false, genFound = false, tenureFound = false, roleFound = false;
 
+  // Build matrixParents first so stem detection is available for all subsequent blocks.
+  // X is a parent only when it EXISTS in the CSV AND has numbered children (X_1 / X.1 etc.).
+  const matrixParents = new Set();
+  codes.forEach(code => {
+    if (!code) return;
+    const m = code.trim().match(/^(.+?)[._]\d+$/);
+    if (m && colIdx[m[1]] !== undefined) matrixParents.add(m[1]);
+  });
+  const isStemCol = col => !!col && matrixParents.has(col.trim());
+
   codes.forEach((code, i) => {
     if (!code || !code.trim()) return;
     const qt = (qTexts[i] || '').toLowerCase();
@@ -1339,8 +1349,8 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
   });
   if (q13Detected.length) C.Q13 = q13Detected;
 
-  // RBEN: detect if all default remote-benefit columns are absent from this CSV
-  if (C.RBEN.every(code => colIdx[code] === undefined)) {
+  // RBEN: detect if fewer than 3 default remote-benefit columns are present in this CSV
+  if (C.RBEN.filter(code => colIdx[code] !== undefined).length < 3) {
     const rbenDet = [];
     codes.forEach((code, ci) => {
       if (!code || !code.trim()) return;
@@ -1352,8 +1362,8 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     if (rbenDet.length) C.RBEN = rbenDet;
   }
 
-  // OBEN: detect if all default office-benefit columns are absent from this CSV
-  if (C.OBEN.every(code => colIdx[code] === undefined)) {
+  // OBEN: detect if fewer than 3 default office-benefit columns are present in this CSV
+  if (C.OBEN.filter(code => colIdx[code] !== undefined).length < 3) {
     const obenDet = [];
     codes.forEach((code, ci) => {
       if (!code || !code.trim()) return;
@@ -1473,18 +1483,6 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     writeInCols.push({ code: c3, label: (qTexts[i] || '').trim() || c3, responses });
   });
 
-  // Identify matrix parent columns: X is a parent only when (a) numbered children X_1/X.1/etc.
-  // exist in the CSV AND (b) X itself is a real column in the CSV. Without condition (b),
-  // sub-items like SUPPLY.1 would be falsely flagged as parents whenever SUPPLY.1.1 exists.
-  const matrixParents = new Set();
-  codes.forEach(code => {
-    if (!code) return;
-    const m = code.trim().match(/^(.+?)[._]\d+$/);
-    if (m && colIdx[m[1]] !== undefined) matrixParents.add(m[1]);
-  });
-  // A column is a stem if and only if it appears as a parent in the structural detection above.
-  // Do NOT fall back to question-text length — Key Survey exports verbose text for real sub-items too.
-  const isStemCol = col => !!col && matrixParents.has(col.trim());
   // OBEN excluded: mkDims uses positional indices into C.OBEN, so stripping shifts indices.
   // RBEN excluded: consistent with OBEN; handle stem filtering separately if needed.
   ['SSUPPLY','SFUNC','SDES','REL','LEARN','SOC','HOST','WVP','TRADE','AMM','VIBE','Q20'].forEach(key => {
@@ -2404,13 +2402,13 @@ function renderExecSummary() {
 
   // ── Department Deviations ─────────────────────────────────────────────
   if (C.DEPT && colIdx[C.DEPT] !== undefined) {
-    const depts = [...new Set(allRows.map(r => gv(r, C.DEPT)).filter(v => v && v.trim()))];
+    const depts = [...new Set(filteredRows.map(r => gv(r, C.DEPT)).filter(v => v && v.trim()))];
     const MIN_N = 10;
     const parseScoreL = v => { const n = parseFloat((v||'').toString().replace(/[^\d.-]/g,'')); return isNaN(n) ? null : n; };
 
     // Per-dept metric computation
     const deptMetrics = depts.map(dept => {
-      const dr = allRows.filter(r => gv(r, C.DEPT) === dept);
+      const dr = filteredRows.filter(r => gv(r, C.DEPT) === dept);
       if (dr.length < MIN_N) return null;
       // eNPS
       let dpro=0,ddet=0,dnT=0;
@@ -5161,6 +5159,8 @@ function downloadClientPackage() {
 (function(){
   if(!window.__PRELOADED__)return;
   var pkgBtn=document.getElementById('clientPkgBtn');if(pkgBtn)pkgBtn.remove();
+  var pdfBtn=document.querySelector('button[onclick="exportPDFReport()"]');if(pdfBtn)pdfBtn.remove();
+  var cw=document.getElementById('columnWarning');if(cw)cw.style.display='none';
   var expInstr=document.querySelector('.export-instructions');if(expInstr)expInstr.remove();
   var zone=document.getElementById('uploadZone');
   if(zone){
