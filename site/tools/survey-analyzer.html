@@ -1628,6 +1628,63 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     writeInCols.push({ code: c3, label: (qTexts[i] || '').trim() || c3, responses });
   });
 
+  // ── Fuzzy section slot remapping ───────────────────────────────────────────
+  // When a hardcoded section code (e.g. SSUPPLY.OISPACE) isn't in colIdx, try to
+  // recover it by matching the slot's label keywords against every CSV column's
+  // question text. This handles Key Survey exports that use different code conventions
+  // than the standard CBRE template.
+  (function fuzzyRemapSections() {
+    const SECTION_KEYS = ['SSUPPLY','SFUNC','SDES','REL','LEARN','SOC','HOST','WVP','TRADE','AMM','VIBE','Q20','RBEN'];
+    // Build pool of all CSV columns with their question text
+    const pool = codes.map((code, i) => ({
+      code: code ? code.trim() : '',
+      qt: (qTexts[i] || '').toLowerCase().trim(),
+    })).filter(c => c.code && colIdx[c.code] !== undefined);
+
+    // Mark codes already matched by exact section array codes
+    const claimed = new Set();
+    SECTION_KEYS.forEach(key => {
+      if (!Array.isArray(C[key])) return;
+      C[key].forEach(col => { if (col && colIdx[col] !== undefined) claimed.add(col); });
+    });
+    // Also claim OBEN codes (OBEN is remapped separately; don't touch its columns)
+    if (Array.isArray(C.OBEN)) C.OBEN.forEach(col => { if (col) claimed.add(col); });
+    // Claim scalar demo and score columns
+    ['DEPT','ROLE','GEN','TENURE','FREQOFF','SAT','ENPS','Q42','Q43','Q45','Q26',
+     'Q31','Q32','Q34','Q51','Q11','Q12','COMMUTE','Q15','WKSCHED','LUNFREQ',
+     'LUNLOCAL','TECHNEED','TIME_I','TIME_O','COL_S','COL_U','MTG_S','MTG_M','MTG_L'].forEach(k => {
+      const v = C[k]; if (typeof v === 'string' && v) claimed.add(v);
+    });
+
+    const STOP = new Set(['with','that','this','from','into','your','each','area','more','less',
+                          'level','very','also','both','just','well','work','have','does']);
+    SECTION_KEYS.forEach(key => {
+      const arr = C[key];
+      const labelArr = C[key + '_L'];
+      if (!Array.isArray(arr)) return;
+      arr.forEach((col, slotIdx) => {
+        if (!col || colIdx[col] !== undefined) return; // already matched
+        const label = (labelArr && labelArr[slotIdx]) || '';
+        if (!label) return;
+        const keywords = label.toLowerCase()
+          .split(/[\s,&\/\-()\[\]]+/)
+          .map(w => w.replace(/[^a-z0-9]/g, ''))
+          .filter(w => w.length >= 4 && !STOP.has(w));
+        if (!keywords.length) return;
+        let bestScore = 0, bestEntry = null;
+        pool.forEach(entry => {
+          if (claimed.has(entry.code)) return;
+          const score = keywords.reduce((s, kw) => s + (entry.qt.includes(kw) ? 1 : 0), 0);
+          if (score > bestScore) { bestScore = score; bestEntry = entry; }
+        });
+        if (bestScore >= 1 && bestEntry) {
+          arr[slotIdx] = bestEntry.code;
+          claimed.add(bestEntry.code);
+        }
+      });
+    });
+  })();
+
   // OBEN excluded: mkDims uses positional indices into C.OBEN, so stripping shifts indices.
   // RBEN excluded: consistent with OBEN; handle stem filtering separately if needed.
   // Context-aware strip: only remove X from a section array if at least one of X's numbered
