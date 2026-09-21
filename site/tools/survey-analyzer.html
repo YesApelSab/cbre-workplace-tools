@@ -296,6 +296,9 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
 
 /* VERBATIM */
 .verbatim-list { display: flex; flex-direction: column; gap: 0.55rem; }
+.other-writein-block { margin-top: 0.85rem; border-top: 1px solid var(--card-border); padding-top: 0.65rem; }
+.other-writein-label { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.5rem; }
+.other-writein-label span { color: var(--accent); font-weight: 700; }
 .verbatim-item { background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-left: 3px solid var(--accent); border-radius: 6px; padding: 0.7rem 1rem; font-size: 0.81rem; color: var(--text); line-height: 1.6; font-style: italic; }
 .verbatim-item.neg { border-left-color: #D2785A; }
 .verbatim-dept { display: inline-block; font-size: 0.62rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); background: rgba(255,255,255,0.06); border: 1px solid var(--card-border); border-radius: 100px; padding: 0.1rem 0.55rem; margin-top: 0.35rem; margin-left: 0.35rem; font-style: normal; }
@@ -1096,6 +1099,7 @@ let colMetaMap = {}; // code → row-2 option label (Key Survey checkbox option 
 let filteredRows = [];
 let extraDemoColumns = [];
 let writeInCols = [];
+let writeInByParent = {}; // parentCodePrefix → writeInCols entry (built after writeInCols)
 let qTextsMap = {};
 let allCategoricalColumns = [];
 let customQuestions = []; // [{id, code, label, scaleType, section}]
@@ -1648,7 +1652,7 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     const looksLikeWriteIn =
       (qt3.includes('other') && (qt3.includes('specify') || qt3.includes('please') || qt3.includes('write') || qt3.includes('describe') || qt3.includes('explain'))) ||
       qt3.includes('if other') || qt3.includes('please specify') || qt3.includes('write-in') || qt3.includes('write in') || qt3.includes('open ended') || qt3.includes('open-ended') ||
-      /[._]other$/i.test(c3) || /[._]spec(ify)?$/i.test(c3) || /[._]ospec$/i.test(c3) || /[._](write|writein|writeother)$/i.test(c3);
+      /[._](other|otext|othertext|otherspec|spec(ify)?|ospec|write(in|other)?|open)$/i.test(c3);
     if (!looksLikeWriteIn) return;
     const responses = [];
     for (let j = 0; j < dataRows.length; j++) {
@@ -1660,6 +1664,18 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     const al = [...uq].reduce((s, v) => s + v.length, 0) / uq.size;
     if (al < 3 || al > 500) return;
     writeInCols.push({ code: c3, label: (qTexts[i] || '').trim() || c3, responses });
+  });
+
+  // Build a lookup from parent code prefix → write-in entry so inlineOtherBlock() can find
+  // the companion column for any chart that has an "Other" option.
+  writeInByParent = {};
+  writeInCols.forEach(w => {
+    const stripped = w.code.replace(/[._]?(otext|othertext|otherspec|other|spec(ify)?|ospec|write(in|other)?|open)$/i, '');
+    if (stripped && stripped.toLowerCase() !== w.code.toLowerCase()) {
+      writeInByParent[stripped.toLowerCase()] = w;
+    }
+    const prefix = w.code.split(/[._]/)[0].toLowerCase();
+    if (prefix && !writeInByParent[prefix]) writeInByParent[prefix] = w;
   });
 
   // ── Fuzzy section slot remapping ───────────────────────────────────────────
@@ -2671,6 +2687,46 @@ function renderCustomCharts(sectionKey) {
   return `<div class="custom-questions-block" data-section="${sectionKey}"><div class="custom-q-section-label">Client Questions</div>${html}</div>`;
 }
 
+// Render "Other" free-text responses inline within any chart that has an "Other" option.
+// parentKey = code or prefix of the parent question (e.g. 'NOISESRC', C.Q45).
+// otherCheckboxCol = optional column code of the "Other" checkbox itself (for combined format
+// where the checkbox stores free-text instead of a binary "1").
+function inlineOtherBlock(parentKey, otherCheckboxCol) {
+  let responses = [];
+
+  // 1. Look up a companion write-in column by parentKey prefix
+  if (parentKey) {
+    const k = (parentKey + '').toLowerCase().replace(/[._]/g, '');
+    let w = writeInByParent[k];
+    if (!w) {
+      // Try partial match: key starts-with or contains the prefix
+      for (const [wk, wv] of Object.entries(writeInByParent)) {
+        const wkn = wk.replace(/[._]/g, '');
+        if (k.startsWith(wkn) || wkn.startsWith(k.slice(0, Math.min(k.length, 5)))) { w = wv; break; }
+      }
+    }
+    if (w) responses = filteredRows.map(r => (gv(r, w.code) || '').trim()).filter(Boolean);
+  }
+
+  // 2. Fallback: extract free-text from the "Other" checkbox column itself
+  // (Key Survey combined format: column stores actual text instead of binary "1")
+  if (!responses.length && otherCheckboxCol && colIdx[otherCheckboxCol] !== undefined) {
+    responses = filteredRows.map(r => (gv(r, otherCheckboxCol) || '').trim())
+      .filter(v => v && v !== '1' && !/^(yes|true|x|other|none)$/i.test(v));
+  }
+
+  if (!responses.length) return '';
+  const uniq = [...new Set(responses)];
+  const shown = uniq.slice(0, 15);
+  const rest  = uniq.slice(15);
+  let vhtml = shown.map(v => `<div class="verbatim-item">${esc(v)}</div>`).join('');
+  if (rest.length) {
+    vhtml += `<div class="verbatim-hidden" style="display:none">${rest.map(v=>`<div class="verbatim-item">${esc(v)}</div>`).join('')}</div>`
+      + `<button class="verbatim-more-btn" onclick="this.previousElementSibling.style.display='block';this.style.display='none'">Show ${rest.length} more ▼</button>`;
+  }
+  return `<div class="other-writein-block"><div class="other-writein-label">Other responses <span>${uniq.length}</span></div><div class="verbatim-list">${vhtml}</div></div>`;
+}
+
 // Insert custom charts into a section container, before its first verbatim section if present
 // Build verbatim cards for all auto-detected "Other (specify)" columns, using filteredRows.
 function buildWriteInHtml() {
@@ -3048,7 +3104,8 @@ function renderDemo() {
         <span style="font-size:0.72rem;color:${isFullOffice?'#17E88F':'var(--text-muted)'};min-width:65px;text-align:right;${isFullOffice?'font-weight:600':''}">${n} (${w}%)</span>
       </div>`;
     }).join('');
-    html += `<div class="chart-card"><div class="chart-card-title">${label} <span>N=${tot}</span></div>${bars}</div>`;
+    const hasOtherOpt = ents.some(([v]) => /^other\b/i.test(v.trim()));
+    html += `<div class="chart-card"><div class="chart-card-title">${label} <span>N=${tot}</span></div>${bars}${hasOtherOpt ? inlineOtherBlock(col) : ''}</div>`;
   });
   document.getElementById('demoCharts').innerHTML = html || '<div class="empty-state">No data for current filters.</div>';
   insertCustomChartsBlock('demoCharts', 'demographics');
@@ -3170,9 +3227,10 @@ function renderSpace() {
       return b.p - a.p;
     });
   if (noiseData.length) {
+    const noiseOtherCol = C.Q20.find((col, i) => /^other$/i.test((C.Q20_L[i] || '').trim()));
     html += `<div class="chart-card"><div class="chart-card-title">Noise Distraction Sources <span>% who selected each</span></div><div class="h-bar-chart">`;
     noiseData.forEach(({label,p}) => { html += hBar(label,p,'#D2785A'); });
-    html += `</div></div>`;
+    html += `</div>${inlineOtherBlock('NOISESRC', noiseOtherCol)}</div>`;
   }
 
   // Lunch Behavior
@@ -3756,6 +3814,7 @@ function renderFuture() {
     <div style="display:grid;grid-template-columns:repeat(${Math.min(visEnts.length,5)},1fr);gap:0.6rem">${tiles}</div>
     ${buckets}
     ${skipN > 0 ? `<div class="loc-footnote" style="margin-top:0.9rem">† ${locTotal} of ${n} respondents answered this question; ${skipN} skipped or left it blank.</div>` : ''}
+    ${inlineOtherBlock(C.Q45)}
   </div>`;
 
   // ── Benefits — side-by-side chip layout ───────────────────────────────
