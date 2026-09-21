@@ -1776,6 +1776,34 @@ function parseCSV(text) {
       qTextsMap[code.trim()] = (qRow[i] || '').trim();
     }
   });
+
+  // ── Normalized alias pass ──────────────────────────────────────────────────
+  // Key Survey exports sometimes use underscores where the template uses dots
+  // (SSUPPLY_OISPACE vs SSUPPLY.OISPACE), different casing, or both.
+  // Build a normalized lookup (lowercase + all separators collapsed to '_') and
+  // back-fill colIdx/qTextsMap for every hardcoded C code not found by exact match.
+  // This runs before autoDetectDemoColumns so all downstream gv() lookups work.
+  (function normalizeColIdx() {
+    const normMap = Object.create(null);
+    Object.keys(colIdx).forEach(orig => {
+      const n = orig.toLowerCase().replace(/[.\-\s]/g, '_');
+      if (!normMap[n]) normMap[n] = orig;
+    });
+    function tryFill(code) {
+      if (!code || typeof code !== 'string' || colIdx[code] !== undefined) return;
+      const n = code.toLowerCase().replace(/[.\-\s]/g, '_');
+      const match = normMap[n];
+      if (match !== undefined) {
+        colIdx[code] = colIdx[match];
+        if (!qTextsMap[code]) qTextsMap[code] = qTextsMap[match] || '';
+      }
+    }
+    Object.values(C).forEach(v => {
+      if (typeof v === 'string') tryFill(v);
+      else if (Array.isArray(v)) v.forEach(c => { if (typeof c === 'string') tryFill(c); });
+    });
+  })();
+
   allRows = rows.slice(dataStart).filter(r => r.some(c => c && c.trim() !== ''));
   autoDetectDemoColumns(rows, isSingleHeader);
   return true;
