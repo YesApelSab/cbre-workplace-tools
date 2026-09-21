@@ -1323,7 +1323,7 @@ function qLabel(col, fallback) {
   const tl = t.toLowerCase();
   const isIntro = t.length > fallback.length * 2.5 ||
     ['for each', 'please rate', 'please indicate', 'please select', 'please specify',
-     'to what extent', 'how much', 'how often', 'how would'].some(p => tl.startsWith(p));
+     'to what extent', 'how much', 'how often', 'how would', 'i would'].some(p => tl.startsWith(p));
   return isIntro ? fallback : t;
 }
 
