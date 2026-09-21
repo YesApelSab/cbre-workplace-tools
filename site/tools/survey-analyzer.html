@@ -2209,11 +2209,14 @@ function initApp() {
   // If this is a client package, load preloaded data into the block-scoped vars
   if (window.__PRELOADED__ && !allRows.length) {
     const p = window.__PRELOADED__;
-    allRows          = p.allRows          || [];
-    colIdx           = p.colIdx           || {};
-    qTextsMap        = p.qTextsMap        || {};
-    extraDemoColumns = p.extraDemoColumns || [];
-    writeInCols      = p.writeInCols      || [];
+    allRows               = p.allRows               || [];
+    colIdx                = p.colIdx                || {};
+    qTextsMap             = p.qTextsMap             || {};
+    colMetaMap            = p.colMetaMap            || {};
+    extraDemoColumns      = p.extraDemoColumns      || [];
+    allCategoricalColumns = p.allCategoricalColumns || [];
+    writeInCols           = p.writeInCols           || [];
+    writeInByParent       = p.writeInByParent       || {};
     if (p.cOverrides) Object.assign(C, p.cOverrides);
     if (p.customQuestions) customQuestions = p.customQuestions;
     const m = p.meta || {};
@@ -5755,7 +5758,7 @@ function downloadClientPackage() {
   });
 
   // Escape closing-script tags in JSON to avoid breaking the injected script block
-  const dataJson = JSON.stringify({ allRows, colIdx, qTextsMap, extraDemoColumns, writeInCols, cOverrides, customQuestions, meta: { clientName, sector, headcount } })
+  const dataJson = JSON.stringify({ allRows, colIdx, qTextsMap, colMetaMap, extraDemoColumns, allCategoricalColumns, writeInCols, writeInByParent, cOverrides, customQuestions, meta: { clientName, sector, headcount } })
                     .replace(/<\/script>/gi, '<\\/script>');
 
   const preloadScript = `<script>window.__PRELOADED__=${dataJson};<\/script>`;
