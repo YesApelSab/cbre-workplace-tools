@@ -1630,12 +1630,41 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
 
   // ── Fuzzy section slot remapping ───────────────────────────────────────────
   // When a hardcoded section code (e.g. SSUPPLY.OISPACE) isn't in colIdx, try to
-  // recover it by matching the slot's label keywords against every CSV column's
-  // question text. This handles Key Survey exports that use different code conventions
-  // than the standard CBRE template.
+  // recover it by matching both question-text keywords AND actual response-value
+  // type (supply scale vs. Likert scale). The data-type check prevents matrix
+  // intro/stem columns from being matched — they have no valid scale responses.
   (function fuzzyRemapSections() {
     const SECTION_KEYS = ['SSUPPLY','SFUNC','SDES','REL','LEARN','SOC','HOST','WVP','TRADE','AMM','VIBE','Q20','RBEN'];
-    // Build pool of all CSV columns with their question text
+    const SUPPLY_RE = /^(right amount|too little|too much|none)$/i;
+    const LIKERT_RE = /^(strongly agree|agree|disagree|strongly disagree|very important|important|somewhat important|not important(?: at all)?)$/i;
+    const SECTION_DTYPE = {
+      SSUPPLY:'supply',
+      SFUNC:'likert',SDES:'likert',REL:'likert',LEARN:'likert',
+      SOC:'likert',HOST:'likert',WVP:'likert',TRADE:'likert',
+      AMM:'likert',VIBE:'likert',RBEN:'likert',Q20:'checkbox',
+    };
+
+    // Classify each CSV column by what response values it actually contains
+    const sampleN = Math.min(dataRows.length, 60);
+    const colDtype = {};
+    codes.forEach((code, ci) => {
+      if (!code || !code.trim() || colIdx[code.trim()] === undefined) return;
+      const c = code.trim();
+      let sup = 0, lik = 0, filled = 0;
+      for (let j = 0; j < sampleN; j++) {
+        const v = (dataRows[j][ci] || '').trim();
+        if (!v) continue;
+        filled++;
+        if (SUPPLY_RE.test(v)) sup++;
+        else if (LIKERT_RE.test(v) || parseLikert(v) !== null) lik++;
+      }
+      if (!filled) { colDtype[c] = 'empty'; return; }
+      if (sup / filled >= 0.25) colDtype[c] = 'supply';
+      else if (lik / filled >= 0.25) colDtype[c] = 'likert';
+      else colDtype[c] = 'other';
+    });
+
+    // Build pool of columns with question text
     const pool = codes.map((code, i) => ({
       code: code ? code.trim() : '',
       qt: (qTexts[i] || '').toLowerCase().trim(),
@@ -1647,9 +1676,7 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
       if (!Array.isArray(C[key])) return;
       C[key].forEach(col => { if (col && colIdx[col] !== undefined) claimed.add(col); });
     });
-    // Also claim OBEN codes (OBEN is remapped separately; don't touch its columns)
     if (Array.isArray(C.OBEN)) C.OBEN.forEach(col => { if (col) claimed.add(col); });
-    // Claim scalar demo and score columns
     ['DEPT','ROLE','GEN','TENURE','FREQOFF','SAT','ENPS','Q42','Q43','Q45','Q26',
      'Q31','Q32','Q34','Q51','Q11','Q12','COMMUTE','Q15','WKSCHED','LUNFREQ',
      'LUNLOCAL','TECHNEED','TIME_I','TIME_O','COL_S','COL_U','MTG_S','MTG_M','MTG_L'].forEach(k => {
@@ -1662,21 +1689,10 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
       const arr = C[key];
       const labelArr = C[key + '_L'];
       if (!Array.isArray(arr)) return;
-
-      // Collect stem prefixes: if a matched code is e.g. SSUPPLY.PISPACE, then 'SSUPPLY'
-      // is a stem prefix. Pool entries whose code equals a stem prefix are the matrix
-      // intro/question-text columns — never valid data columns for these slots.
-      const stemPrefixes = new Set();
-      arr.forEach(col => {
-        if (!col || colIdx[col] === undefined) return;
-        const dot = col.indexOf('.');
-        const us  = col.indexOf('_');
-        const sep = dot !== -1 ? dot : us;
-        if (sep > 0) stemPrefixes.add(col.slice(0, sep));
-      });
+      const expectedDtype = SECTION_DTYPE[key] || 'likert';
 
       arr.forEach((col, slotIdx) => {
-        if (!col || colIdx[col] !== undefined) return; // already matched
+        if (!col || colIdx[col] !== undefined) return;
         const label = (labelArr && labelArr[slotIdx]) || '';
         if (!label) return;
         const keywords = label.toLowerCase()
@@ -1687,8 +1703,11 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
         let bestScore = 0, bestEntry = null;
         pool.forEach(entry => {
           if (claimed.has(entry.code)) return;
-          // Skip matrix stem columns (bare prefix like 'SSUPPLY', 'SFUNCTION', etc.)
-          if (stemPrefixes.has(entry.code)) return;
+          // Must match the section's expected data type (supply vs. Likert vs. checkbox).
+          // This is the primary guard that prevents stem/intro columns from being matched:
+          // a matrix intro column contains no supply or Likert responses.
+          const dtype = colDtype[entry.code] || 'other';
+          if (expectedDtype !== 'checkbox' && dtype !== expectedDtype) return;
           const score = keywords.reduce((s, kw) => s + (entry.qt.includes(kw) ? 1 : 0), 0);
           if (score > bestScore) { bestScore = score; bestEntry = entry; }
         });
