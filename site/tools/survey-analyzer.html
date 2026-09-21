@@ -2939,7 +2939,7 @@ function renderWVP() {
   const isFilteredW = filteredRows.length < allRows.length;
   const wvpD = C.WVP.map((col,i) => ({label:qLabel(col, C.WVP_L[i]),...likertDist(rows,col),orgAvg:isFilteredW?likertDist(allRows,col).avg:null}));
   const avgs = wvpD.map(d => d.avg).filter(v => v !== null);
-  const comp = avgs.length ? (avg(avgs)*25).toFixed(0) : '—';
+  const comp = avgs.length ? (((avg(avgs)-1)/3)*100).toFixed(0) : '—';
   const sorted = [...wvpD].sort((a,b)=>(b.avg||0)-(a.avg||0));
 
   // ── Key Takeaways ─────────────────────────────────────────────────────
@@ -4492,11 +4492,12 @@ function exportPDFReport() {
   const dateStr    = new Date().toLocaleDateString('en-US', { year:'numeric', month:'long' });
   const filterDesc = (() => {
     const parts = [];
-    if (document.getElementById('fDept').value)   parts.push('Dept: ' + document.getElementById('fDept').value);
-    if (document.getElementById('fRole').value)   parts.push('Role: ' + document.getElementById('fRole').value);
-    if (document.getElementById('fGen').value)    parts.push('Gen: '  + document.getElementById('fGen').value);
-    if (document.getElementById('fTenure').value) parts.push('Tenure: '+ document.getElementById('fTenure').value);
-    if (document.getElementById('fFreq').value)   parts.push('Freq: ' + document.getElementById('fFreq').value);
+    const _fv = id => { const v = filterVals(id); return v.length ? v.join(', ') : ''; };
+    if (_fv('fDept'))   parts.push('Dept: '   + _fv('fDept'));
+    if (_fv('fRole'))   parts.push('Role: '   + _fv('fRole'));
+    if (_fv('fGen'))    parts.push('Gen: '    + _fv('fGen'));
+    if (_fv('fTenure')) parts.push('Tenure: ' + _fv('fTenure'));
+    if (_fv('fFreq'))   parts.push('Freq: '   + _fv('fFreq'));
     extraDemoColumns.forEach(({ code, label }) => {
       const el = document.getElementById(`fExtra_${code}`);
       if (el && el.value) parts.push(label.split(' ').slice(0,2).join(' ') + ': ' + el.value);
@@ -4566,7 +4567,7 @@ function exportPDFReport() {
 
   // WVP
   const wvpItems=C.WVP.map((col,i)=>({label:qLabel(col, C.WVP_L[i]),...likertDist(rows,col)})).filter(d=>d.avg!==null);
-  const wvpComposite=wvpItems.length?Math.round(wvpItems.reduce((s,d)=>s+(d.avg||0),0)/wvpItems.length/4*100):null;
+  const wvpComposite=wvpItems.length?Math.round(((wvpItems.reduce((s,d)=>s+(d.avg||0),0)/wvpItems.length)-1)/3*100):null;
   const lowestWVP=wvpItems.length?[...wvpItems].sort((a,b)=>(a.avg||0)-(b.avg||0))[0]:null;
   const highestWVP=wvpItems.length?[...wvpItems].sort((a,b)=>(b.avg||0)-(a.avg||0))[0]:null;
 
@@ -4983,7 +4984,7 @@ body{font-family:'DM Sans',Arial,sans-serif;background:#fff;color:#1A2E24;font-s
         const dr = rows.filter(r => gv(r, C.DEPT) === dept);
         if (!dr.length) return null;
         const wvpVals = C.WVP.map(col => likertDist(dr, col).avg).filter(v => v !== null);
-        const wvpComp2 = wvpVals.length ? Math.round(wvpVals.reduce((s,v)=>s+v,0)/wvpVals.length/4*100) : null;
+        const wvpComp2 = wvpVals.length ? Math.round(((wvpVals.reduce((s,v)=>s+v,0)/wvpVals.length)-1)/3*100) : null;
         let p2=0,pa2=0,d2=0,nt2=0;
         dr.forEach(r=>{const v=parseScore(gv(r,C.ENPS));if(v===null)return;nt2++;if(v>=9)p2++;else if(v>=7)pa2++;else d2++;});
         const nps2 = nt2 ? Math.round((p2/nt2-d2/nt2)*100) : null;
@@ -5107,7 +5108,7 @@ body{font-family:'DM Sans',Arial,sans-serif;background:#fff;color:#1A2E24;font-s
   </div>
 
   <div style="font-size:9px;color:#9AB0AA;border-top:1px solid #D8E8E2;padding-top:12px;line-height:1.7">
-    <strong>Data collection:</strong> Survey administered via Qualtrics. All responses are anonymous and voluntarily provided. &nbsp;·&nbsp;
+    <strong>Data collection:</strong> Survey administered via Key Survey. All responses are anonymous and voluntarily provided. &nbsp;·&nbsp;
     <strong>Rounding:</strong> Percentages are rounded to the nearest whole number and may not sum to exactly 100%. &nbsp;·&nbsp;
     <strong>Thresholds:</strong> Questions with fewer than 5 responses in a segment are suppressed to protect anonymity. &nbsp;·&nbsp;
     <strong>Prepared by:</strong> CBRE Workplace Survey Analysis · Confidential — For internal use only
@@ -5138,10 +5139,12 @@ function downloadClientPackage() {
   const origText = btn ? btn.textContent : '';
   if (btn) { btn.textContent = 'Generating…'; btn.disabled = true; }
 
-  // Capture auto-detected column code overrides so the client package uses the same mappings
+  // Capture ALL C overrides (strings and arrays) so the client package uses the same column mappings.
+  // Without this, auto-detected OBEN/RBEN/etc. revert to defaults when the recipient opens the file.
   const cOverrides = {};
-  ['DEPT','ROLE','GEN','TENURE','FREQOFF','Q11','Q12','COMMUTE','Q15'].forEach(k => {
-    if (typeof C[k] === 'string') cOverrides[k] = C[k];
+  Object.keys(C).forEach(k => {
+    const v = C[k];
+    if (typeof v === 'string' || Array.isArray(v)) cOverrides[k] = v;
   });
 
   // Escape closing-script tags in JSON to avoid breaking the injected script block
