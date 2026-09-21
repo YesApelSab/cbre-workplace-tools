@@ -1491,7 +1491,9 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     const t = qTextsMap[col];
     return t && t.length > 55;
   };
-  ['SSUPPLY','SFUNC','SDES','REL','LEARN','RBEN','OBEN','SOC','HOST','WVP','TRADE','AMM','VIBE','Q20'].forEach(key => {
+  // OBEN/RBEN excluded: mkDims uses positional indices into these arrays, so stripping
+  // shifts indices and scrambles category assignments. Handle their stem columns separately.
+  ['SSUPPLY','SFUNC','SDES','REL','LEARN','SOC','HOST','WVP','TRADE','AMM','VIBE','Q20'].forEach(key => {
     if (!Array.isArray(C[key])) return;
     const lKey = key + '_L';
     const keep = C[key].map(col => !isStemCol(col));
