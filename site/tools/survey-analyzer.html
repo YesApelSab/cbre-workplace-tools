@@ -4998,7 +4998,8 @@ function renderSentiment() {
     html += sh;
   }
 
-  // ── Methodology note before pyramid ──────────────────────────────────
+  // ── Methodology note + Pyramid — only when eNPS or SAT columns exist ────
+  if (hasScoreData) {
   html += clsMethod === 'clustering'
     ? `<div class="derived-note"><strong>Derived classification via latent class analysis.</strong>
         Fewer than 50% of respondents had direct eNPS scores, so sentiment classes were inferred via k-means clustering (k=3) on
@@ -5059,6 +5060,7 @@ function renderSentiment() {
     Levels with the largest gap are where workplace investment most influences whether someone becomes a promoter or detractor.
   </div>
   </div></div></div>`;
+  } // end hasScoreData — pyramid + methodology note
 
   // ── Final Comments (Q51) ──────────────────────────────────────────────
   const q51Data = rows.map(r => ({ text: gv(r, C.Q51), dept: gv(r, C.DEPT) })).filter(v => v.text && v.text.length > 5);
