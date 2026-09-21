@@ -1227,10 +1227,7 @@ function supplyDist(rows, col) {
 // Returns the actual question text from the CSV for a column code, falling back to a default.
 function qLabel(col, fallback) {
   const t = col && qTextsMap[col];
-  if (!t) return fallback || col || '';
-  // Safety net: long question text signals a matrix stem row; use the fallback label instead.
-  if (t.length > 55) return fallback || col || '';
-  return t;
+  return t || fallback || col || '';
 }
 
 // ─── CSV PARSE ────────────────────────────────────────────────────────────────
@@ -1484,15 +1481,11 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     const m = code.trim().match(/^(.+?)[._]\d+$/);
     if (m) matrixParents.add(m[1]);
   });
-  // Also fall back to question-text length for parents Key Survey exports without numbered children.
-  const isStemCol = col => {
-    if (!col) return false;
-    if (matrixParents.has(col.trim())) return true;
-    const t = qTextsMap[col];
-    return t && t.length > 55;
-  };
-  // OBEN/RBEN excluded: mkDims uses positional indices into these arrays, so stripping
-  // shifts indices and scrambles category assignments. Handle their stem columns separately.
+  // A column is a stem if and only if it appears as a parent in the structural detection above.
+  // Do NOT fall back to question-text length — Key Survey exports verbose text for real sub-items too.
+  const isStemCol = col => !!col && matrixParents.has(col.trim());
+  // OBEN excluded: mkDims uses positional indices into C.OBEN, so stripping shifts indices.
+  // RBEN excluded: consistent with OBEN; handle stem filtering separately if needed.
   ['SSUPPLY','SFUNC','SDES','REL','LEARN','SOC','HOST','WVP','TRADE','AMM','VIBE','Q20'].forEach(key => {
     if (!Array.isArray(C[key])) return;
     const lKey = key + '_L';
