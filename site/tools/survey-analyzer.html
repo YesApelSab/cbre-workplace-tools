@@ -249,6 +249,9 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
 .chart-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--radius); padding: 1.2rem 1.25rem; margin-bottom: 1rem; }
 .chart-card-title { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 1rem; }
 .chart-card-title span { color: var(--accent); font-weight: 700; }
+.custom-questions-block { border-top: 1px solid var(--card-border); margin-top: 0.5rem; padding-top: 0.25rem; }
+.custom-q-section-label { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); opacity: 0.7; margin-bottom: 0.75rem; margin-top: 0.75rem; }
+.custom-q-badge { display: inline-block; font-size: 0.58rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); border: 1px solid var(--accent); border-radius: 3px; padding: 0 4px; margin-left: 6px; opacity: 0.75; vertical-align: middle; }
 
 /* STACKED BARS */
 .stacked-chart { display: flex; flex-direction: column; gap: 0.6rem; }
@@ -1454,8 +1457,9 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
   }
 
   obenWasAutoDetected = false;
-  // OBEN: detect if ALL default office-benefit columns are absent from this CSV
-  if (C.OBEN.every(code => colIdx[code] === undefined)) {
+  // OBEN: detect if ANY default office-benefit columns are absent from this CSV.
+  // Pre-populate already-resolved slots so greedy assignment only fills the gaps.
+  if (C.OBEN.some(code => !code || colIdx[code] === undefined)) {
     const obenDet = [];
     codes.forEach((code, ci) => {
       if (!code || !code.trim()) return;
@@ -1479,8 +1483,9 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
         ['privacy','private','heads-down','solo work','individual work'],           // 7 OPRIVATE→Experience
         ['configur','setup','ergon','flexible space','dedicated workspace'],        // 8 OCONFIG→Functionality
       ];
-      const sorted = new Array(9).fill(null);
-      const usedCols = new Set();
+      // Pre-fill slots already resolved by normalization; only run greedy on null slots.
+      const sorted = C.OBEN.map(code => (code && colIdx[code] !== undefined) ? code : null);
+      const usedCols = new Set(sorted.filter(Boolean));
       // Greedy: repeatedly pick the best unassigned (col, slot) pair
       let assigned = true;
       while (assigned) {
@@ -1596,6 +1601,7 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     const c2 = code.trim();
     if (sectionArrayCodes.has(c2)) return;
     const qt2 = (qTexts[i] || '').trim() || c2;
+    if (isQ13Pattern(qt2.toLowerCase())) return; // exclude cross-collab questions from Add Filter picker
     const uniq2 = new Set();
     for (let j = 0; j < dataRows.length; j++) {
       const v = (dataRows[j][i] || '').trim();
@@ -2541,6 +2547,7 @@ function renderCustomCharts(sectionKey) {
   );
   if (!qs.length) return '';
 
+  const custBadge = '<span class="custom-q-badge">Client Q</span>';
   let html = '';
   qs.forEach(q => {
     const rows = filteredRows;
@@ -2637,7 +2644,7 @@ function renderCustomCharts(sectionKey) {
   });
 
   if (!html) return '';
-  return `<div class="custom-questions-block" data-section="${sectionKey}">${html}</div>`;
+  return `<div class="custom-questions-block" data-section="${sectionKey}"><div class="custom-q-section-label">Client Questions</div>${html}</div>`;
 }
 
 // Insert custom charts into a section container, before its first verbatim section if present
