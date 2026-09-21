@@ -1228,7 +1228,7 @@ function supplyDist(rows, col) {
 function qLabel(col, fallback) {
   const t = col && qTextsMap[col];
   if (!t) return fallback || col || '';
-  // Stem/parent question text is 55+ chars; sub-item labels are ≤50. Use fallback for stems.
+  // Safety net: long question text signals a matrix stem row; use the fallback label instead.
   if (t.length > 55) return fallback || col || '';
   return t;
 }
@@ -1476,13 +1476,25 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     writeInCols.push({ code: c3, label: (qTexts[i] || '').trim() || c3, responses });
   });
 
-  // Strip matrix stem columns from all section arrays. Key Survey CSVs include a parent/intro
-  // column per matrix whose question text is the full sentence (55+ chars). Sub-item labels
-  // are always short phrases (≤50 chars). Any column with question text > 55 chars is a stem.
+  // Identify matrix parent columns structurally: if the CSV contains codes X_1/X.1/X_01 etc.,
+  // then X is a parent column and must never appear as a chart row, regardless of its data.
+  const matrixParents = new Set();
+  codes.forEach(code => {
+    if (!code) return;
+    const m = code.trim().match(/^(.+?)[._]\d+$/);
+    if (m) matrixParents.add(m[1]);
+  });
+  // Also fall back to question-text length for parents Key Survey exports without numbered children.
+  const isStemCol = col => {
+    if (!col) return false;
+    if (matrixParents.has(col.trim())) return true;
+    const t = qTextsMap[col];
+    return t && t.length > 55;
+  };
   ['SSUPPLY','SFUNC','SDES','REL','LEARN','RBEN','OBEN','SOC','HOST','WVP','TRADE','AMM','VIBE','Q20'].forEach(key => {
     if (!Array.isArray(C[key])) return;
     const lKey = key + '_L';
-    const keep = C[key].map(col => { const t = col && qTextsMap[col]; return !(t && t.length > 55); });
+    const keep = C[key].map(col => !isStemCol(col));
     C[key] = C[key].filter((_, i) => keep[i]);
     if (Array.isArray(C[lKey])) C[lKey] = C[lKey].filter((_, i) => keep[i]);
   });
