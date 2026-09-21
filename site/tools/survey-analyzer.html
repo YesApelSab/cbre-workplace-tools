@@ -1332,9 +1332,11 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
   }
 
   // Q13: cross-team collaborators — collect columns whose question text matches,
-  // but only from the FIRST matching question group (same question text = same multi-select)
+  // but only from the FIRST matching question group (same question text = same multi-select).
+  // Use first-80-char prefix for matching to tolerate minor per-column text variations.
   const q13Detected = [];
   let q13FirstText = null;
+  const q13Norm = t => t.trim().slice(0, 80);
   codes.forEach((code, i) => {
     if (!code || !code.trim()) return;
     const qt = (qTexts[i] || '').toLowerCase();
@@ -1343,8 +1345,8 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
       (qt.includes('cross-team') || qt.includes('cross team')) ||
       (qt.includes('top') && qt.includes('collaborat') && (qt.includes('department') || qt.includes('team') || qt.includes('unit') || qt.includes('division') || qt.includes('office')))
     ) {
-      if (q13FirstText === null) q13FirstText = qt;
-      if (qt === q13FirstText) q13Detected.push(code.trim());
+      if (q13FirstText === null) q13FirstText = q13Norm(qt);
+      if (q13Norm(qt) === q13FirstText) q13Detected.push(code.trim());
     }
   });
   if (q13Detected.length) C.Q13 = q13Detected;
@@ -1362,8 +1364,8 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     if (rbenDet.length) C.RBEN = rbenDet;
   }
 
-  // OBEN: detect if fewer than 3 default office-benefit columns are present in this CSV
-  if (C.OBEN.filter(code => colIdx[code] !== undefined).length < 3) {
+  // OBEN: detect if ALL default office-benefit columns are absent from this CSV
+  if (C.OBEN.every(code => colIdx[code] === undefined)) {
     const obenDet = [];
     codes.forEach((code, ci) => {
       if (!code || !code.trim()) return;
@@ -1385,6 +1387,13 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
       if (hasVirt && hasMtg) C.HYBMTG = code.trim();
     });
   }
+
+  // Cross-collab detection pattern — used to exclude Q13-type questions from the filter bar
+  const isQ13Pattern = qt => qt && (
+    (qt.includes('which') && (qt.includes('business unit') || qt.includes('department') || qt.includes('division') || qt.includes('office')) && (qt.includes('work with') || qt.includes('collaborate') || qt.includes('most frequently'))) ||
+    qt.includes('cross-team') || qt.includes('cross team') ||
+    (qt.includes('top') && qt.includes('collaborat') && (qt.includes('department') || qt.includes('division') || qt.includes('office')))
+  );
 
   // Collect any additional categorical columns not already claimed by ANY known C column
   extraDemoColumns = [];
@@ -1418,6 +1427,7 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     if (!qt || qt.length < 5) return;
     const qtl = qt.toLowerCase();
     if (OPINION_PATTERNS.some(p => qtl.includes(p))) return;
+    if (isQ13Pattern(qtl)) return; // cross-collab question — not a useful demographic filter
     const uniq = new Set();
     for (let j = 0; j < dataRows.length; j++) {
       const v = (dataRows[j][i] || '').trim();
@@ -1455,6 +1465,20 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     if (vals3.every(v => /^[\d.,%-]+$/.test(v))) return;
     allCategoricalColumns.push({ code: c2, label: qt2, vals: vals3.sort() });
   });
+  // Also include known categorical columns (Q11, Q12, Q15, COMMUTE, HYBMTG) in the Add Filter picker
+  // so users can filter by workspace type, office assignment, commute mode, etc.
+  [C.Q11, C.Q12, C.Q15, C.COMMUTE, C.HYBMTG].forEach(code => {
+    if (!code || typeof code !== 'string' || colIdx[code] === undefined) return;
+    if (allCategoricalColumns.some(c => c.code === code)) return;
+    const ci = colIdx[code];
+    const qt2 = qTextsMap[code] || code;
+    const uniqK = new Set();
+    dataRows.forEach(r => { const v = (r[ci] || '').trim(); if (v) uniqK.add(v); });
+    if (uniqK.size < 2 || uniqK.size > 25) return;
+    const valsK = [...uniqK];
+    if (valsK.every(v => /^[\d.,%-]+$/.test(v))) return;
+    allCategoricalColumns.push({ code, label: qt2, vals: valsK.sort() });
+  });
 
   // Write-in verbatim columns: free-text "Other (specify)" companions
   // Detect columns not already claimed whose question text suggests an open-ended "Other" field
@@ -1485,11 +1509,25 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
 
   // OBEN excluded: mkDims uses positional indices into C.OBEN, so stripping shifts indices.
   // RBEN excluded: consistent with OBEN; handle stem filtering separately if needed.
+  // Context-aware strip: only remove X from a section array if at least one of X's numbered
+  // children (X.N / X_N) is also in that same array.  This prevents stripping real data
+  // columns whose response-category sub-columns (e.g. SSUPPLY.OISPACE.1) exist in the CSV
+  // but are NOT part of the section array we are charting.
   ['SSUPPLY','SFUNC','SDES','REL','LEARN','SOC','HOST','WVP','TRADE','AMM','VIBE','Q20'].forEach(key => {
     if (!Array.isArray(C[key])) return;
     const lKey = key + '_L';
-    const keep = C[key].map(col => !isStemCol(col));
-    C[key] = C[key].filter((_, i) => keep[i]);
+    const arr = C[key];
+    const keep = arr.map(col => {
+      if (!isStemCol(col)) return true; // not a stem — keep
+      const trimmed = col.trim();
+      // Only strip if a numbered child of col is also present in this same array
+      return !arr.some(other => {
+        if (!other || other === col) return false;
+        const m = other.trim().match(/^(.+?)[._]\d+$/);
+        return m && m[1] === trimmed;
+      });
+    });
+    C[key] = arr.filter((_, i) => keep[i]);
     if (Array.isArray(C[lKey])) C[lKey] = C[lKey].filter((_, i) => keep[i]);
   });
 }
@@ -2837,10 +2875,13 @@ function renderRel() {
     rows.forEach(r => {
       C.Q13.forEach(col => {
         const v = gv(r, col);
-        if (v && v.trim()) {
-          const k = v.trim();
-          ctCounts[k] = (ctCounts[k] || 0) + 1;
-        }
+        if (!v || !v.trim() || v.trim() === '0') return;
+        const rawV = v.trim();
+        // Binary indicator (value = "1" / "Yes" / "TRUE"): use the column's question text as the option label
+        const k = (rawV === '1' || rawV.toLowerCase() === 'yes' || rawV.toLowerCase() === 'true')
+          ? (qTextsMap[col] || col)
+          : rawV;
+        if (k) ctCounts[k] = (ctCounts[k] || 0) + 1;
       });
     });
     const ctEntries = Object.entries(ctCounts);
@@ -3355,17 +3396,17 @@ function personalityScalesSVG(chartOrder) {
     });
     const lineH = 20; // height of vertical marker lines
     if (s.orgPct !== null && s.orgPct !== undefined) {
-      // Two-line mode: filtered avg = white line, company avg = accent green line
+      // Two-line mode: filtered avg = accent green, company avg = muted white
       const ox = padL + (s.orgPct / 100) * trackW;
-      // Company avg line (green)
+      // Company avg line (muted)
       g += `<g onmousemove="showScaleTip(event,'Company avg: ${s.orgPct}%')" onmouseleave="hideScaleTip()" style="cursor:default">`;
-      g += `<line x1="${ox.toFixed(1)}" y1="${(cy - lineH / 2).toFixed(1)}" x2="${ox.toFixed(1)}" y2="${(cy + lineH / 2).toFixed(1)}" stroke="#17E88F" stroke-width="2.5" stroke-linecap="round"/>`;
+      g += `<line x1="${ox.toFixed(1)}" y1="${(cy - lineH / 2).toFixed(1)}" x2="${ox.toFixed(1)}" y2="${(cy + lineH / 2).toFixed(1)}" stroke="rgba(242,244,243,0.45)" stroke-width="2.5" stroke-linecap="round"/>`;
       g += `<rect x="${(ox - 8).toFixed(1)}" y="${(cy - lineH / 2).toFixed(1)}" width="16" height="${lineH}" fill="transparent"/>`;
       g += `</g>`;
-      // Filtered avg line (white)
+      // Filtered avg line (green)
       const fx = padL + (s.pct / 100) * trackW;
       g += `<g onmousemove="showScaleTip(event,'Filtered avg: ${s.pct}%')" onmouseleave="hideScaleTip()" style="cursor:default">`;
-      g += `<line x1="${fx.toFixed(1)}" y1="${(cy - lineH / 2).toFixed(1)}" x2="${fx.toFixed(1)}" y2="${(cy + lineH / 2).toFixed(1)}" stroke="rgba(242,244,243,0.85)" stroke-width="2.5" stroke-linecap="round"/>`;
+      g += `<line x1="${fx.toFixed(1)}" y1="${(cy - lineH / 2).toFixed(1)}" x2="${fx.toFixed(1)}" y2="${(cy + lineH / 2).toFixed(1)}" stroke="#17E88F" stroke-width="2.5" stroke-linecap="round"/>`;
       g += `<rect x="${(fx - 8).toFixed(1)}" y="${(cy - lineH / 2).toFixed(1)}" width="16" height="${lineH}" fill="transparent"/>`;
       g += `</g>`;
     } else {
@@ -3390,12 +3431,12 @@ function personalityScalesSVG(chartOrder) {
   // Legend
   const legY = axisY + 22;
   if (hasOrgAvg) {
-    // Two-item legend: filtered white line + company green line
+    // Two-item legend: filtered green line + company muted line
     const legCx = W / 2 - 80;
-    g += `<line x1="${(legCx - 8).toFixed(1)}" y1="${legY.toFixed(1)}" x2="${(legCx + 8).toFixed(1)}" y2="${legY.toFixed(1)}" stroke="rgba(242,244,243,0.8)" stroke-width="2.5" stroke-linecap="round"/>`;
+    g += `<line x1="${(legCx - 8).toFixed(1)}" y1="${legY.toFixed(1)}" x2="${(legCx + 8).toFixed(1)}" y2="${legY.toFixed(1)}" stroke="#17E88F" stroke-width="2.5" stroke-linecap="round"/>`;
     g += `<text x="${(legCx + 16).toFixed(1)}" y="${(legY + 4).toFixed(1)}" font-size="9.5" fill="rgba(242,244,243,0.45)" text-anchor="start" font-family="DM Sans,Arial,sans-serif">Filtered avg</text>`;
     const ox2 = legCx + 120;
-    g += `<line x1="${(ox2 - 8).toFixed(1)}" y1="${legY.toFixed(1)}" x2="${(ox2 + 8).toFixed(1)}" y2="${legY.toFixed(1)}" stroke="#17E88F" stroke-width="2.5" stroke-linecap="round"/>`;
+    g += `<line x1="${(ox2 - 8).toFixed(1)}" y1="${legY.toFixed(1)}" x2="${(ox2 + 8).toFixed(1)}" y2="${legY.toFixed(1)}" stroke="rgba(242,244,243,0.45)" stroke-width="2.5" stroke-linecap="round"/>`;
     g += `<text x="${(ox2 + 16).toFixed(1)}" y="${(legY + 4).toFixed(1)}" font-size="9.5" fill="rgba(242,244,243,0.45)" text-anchor="start" font-family="DM Sans,Arial,sans-serif">Company avg</text>`;
   } else {
     const legX = W / 2;
@@ -4123,6 +4164,9 @@ function renderSentiment() {
   const rows = filteredRows;
   const n = rows.length;
   const isFiltered = filteredRows.length < allRows.length;
+  const hasENPS = colIdx[C.ENPS] !== undefined;
+  const hasSAT  = colIdx[C.SAT]  !== undefined;
+  const hasScoreData = hasENPS || hasSAT;
   let html = '';
 
   // ── NPS calc ─────────────────────────────────────────────────────────
@@ -4165,6 +4209,9 @@ function renderSentiment() {
   }
 
   // ── Stat cards ────────────────────────────────────────────────────────
+  if (!hasScoreData) {
+    html += `<div class="chart-card" style="margin-bottom:0.9rem;border-color:rgba(23,232,143,0.18)"><div style="font-size:0.82rem;color:var(--text-muted)"><strong style="color:var(--text)">Engagement scoring unavailable</strong> — no eNPS or satisfaction question was detected in this survey. Engagement pyramid and tier analysis are hidden. Open-ended responses appear below if present.</div></div>`;
+  } else {
   html += `<div class="sent-stat-row">
     <div class="sent-stat-card">
       <div class="sent-stat-value">${n}</div>
@@ -4177,6 +4224,7 @@ function renderSentiment() {
       <div class="sent-stat-sub">Avg score out of 10${oSatSub}</div>
     </div>
   </div>`;
+  } // end hasScoreData
 
   // ── NPS bar summary ──────────────────────────────────────────────────
   if (nT > 0) {
