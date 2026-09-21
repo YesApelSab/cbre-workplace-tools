@@ -1475,6 +1475,17 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     if (al < 3 || al > 500) return;
     writeInCols.push({ code: c3, label: (qTexts[i] || '').trim() || c3, responses });
   });
+
+  // Strip matrix stem columns from all section arrays. Key Survey CSVs include a
+  // "parent" column for each matrix whose question text is the full intro sentence
+  // (100+ chars). These are not sub-items and must not render as chart rows.
+  ['SSUPPLY','SFUNC','SDES','REL','LEARN','RBEN','OBEN','SOC','HOST','WVP','TRADE','AMM','VIBE','Q20'].forEach(key => {
+    if (!Array.isArray(C[key])) return;
+    const lKey = key + '_L';
+    const keep = C[key].map(col => { const t = col && qTextsMap[col]; return !(t && t.length > 80); });
+    C[key] = C[key].filter((_, i) => keep[i]);
+    if (Array.isArray(C[lKey])) C[lKey] = C[lKey].filter((_, i) => keep[i]);
+  });
 }
 
 function parseCSV(text) {
