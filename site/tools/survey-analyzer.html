@@ -1455,8 +1455,8 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
   if (q13Detected.length) {
     const q13Set = new Set(q13Detected);
     q13Detected.forEach(detected => {
-      // Try separator-based pattern first (_N, -N, .N), then bare suffix (CODENNN)
-      const m = detected.match(/^(.+[_\-\.])(\d+)$/) || detected.match(/^([A-Za-z][A-Za-z_\-\.]*?)(\d+)$/);
+      // Strip trailing digit run to get the shared prefix (works for Q10.A1, COLLAB_1, COLLAB1, etc.)
+      const m = detected.match(/^(.*\D)(\d+)$/);
       if (!m) return;
       const prefix = m[1];
       codes.forEach(code => {
