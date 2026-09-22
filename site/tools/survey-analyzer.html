@@ -5880,6 +5880,7 @@ function downloadClientPackage() {
   var pdfBtn=document.querySelector('button[onclick="exportPDFReport()"]');if(pdfBtn)pdfBtn.remove();
   var cw=document.getElementById('columnWarning');if(cw)cw.style.display='none';
   var pl=document.querySelector('.prelaunch-section');if(pl)pl.remove();
+  var af=document.getElementById('addFilterBtn');if(af)af.remove();
   var expInstr=document.querySelector('.export-instructions');if(expInstr)expInstr.remove();
   var zone=document.getElementById('uploadZone');
   if(zone){
