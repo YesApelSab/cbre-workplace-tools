@@ -3423,18 +3423,44 @@ function renderRel() {
   sd.forEach(d => html += stackedBar(d.label, d.d, d.t, d.avg, null, d.orgAvg));
   html += `</div>${likertLegendImportance()}</div>`;
 
-  // Hosting
+  // Hosting — use actual survey values (no bucketing), actual option labels from colMetaMap
   html += GRP_HDR('Hosting');
-  const hostColors = ['#003F2D','#17E88F','#D2785A','#8B1A1A'];
+  const HOST_FREQ_ORD = ['daily','weekly','biweekly','every two','monthly','quarterly','few times','rarely','occasionally','never'];
+  const HOST_PAL = ['#17E88F','#0FB870','#80BBAD','#538184','#DBD99A','#D2785A','#8B1A1A'];
   const hd = C.HOST.map((col,i) => {
-    const d2={4:0,3:0,2:0,1:0}; let t=0;
-    rows.forEach(r => { const v=parseHostFreq(gv(r,col)); if(v!==null){d2[v]++;t++;} });
-    const a = t ? (4*d2[4]+3*d2[3]+2*d2[2]+1*d2[1])/t : null;
-    return {label:qLabel(col, C.HOST_L[i]), d:d2, t, avg:a};
-  }).filter(d => d.t > 0).sort((a,b)=>(b.avg||0)-(a.avg||0));
-  html += `<div class="chart-card"><div class="chart-card-title">Hosting Frequency at Office</div><div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem">How frequently do you host each of the following groups in the office?</div><div class="stacked-chart">`;
-  hd.forEach(d => html += stackedBar(d.label, d.d, d.t, d.avg));
-  html += `</div><div class="chart-legend">${['Never','Quarterly/Rarely','Biweekly/Monthly','Daily/Weekly'].map((l,i)=>`<div class="legend-item"><div class="legend-dot" style="background:${hostColors[3-i]}"></div>${l}</div>`).join('')}</div></div>`;
+    const counts = {}; let t = 0;
+    rows.forEach(r => { const v = gv(r,col).trim(); if (v) { counts[v]=(counts[v]||0)+1; t++; } });
+    const label = colMetaMap[col] || qLabel(col, C.HOST_L[i]);
+    return { label, counts, t };
+  }).filter(d => d.t > 0);
+  const _allHFreqs = [...new Set(hd.flatMap(d => Object.keys(d.counts)))];
+  _allHFreqs.sort((a,b) => {
+    const r = s => { const sl=s.toLowerCase(); const i=HOST_FREQ_ORD.findIndex(f=>sl.includes(f)); return i<0?99:i; };
+    return r(a)-r(b);
+  });
+  hd.sort((a,b) => {
+    const sc = d => _allHFreqs.reduce((s,v,i)=>s+(d.counts[v]||0)*(_allHFreqs.length-i),0)/(d.t||1);
+    return sc(b)-sc(a);
+  });
+  if (hd.length) {
+    const hBars = hd.map(d => {
+      const segs = _allHFreqs.map((v,i) => {
+        const n=d.counts[v]||0; if(!n) return '';
+        const w=(n/d.t*100).toFixed(1);
+        const txt=parseFloat(w)>7?`${w}%`:'';
+        return `<div style="width:${w}%;height:100%;background:${HOST_PAL[i%HOST_PAL.length]};display:flex;align-items:center;justify-content:center;font-size:0.6rem;font-weight:600;color:rgba(0,0,0,0.7);overflow:hidden;min-width:0" title="${esc(v)}: ${n} (${w}%)">${txt}</div>`;
+      }).join('');
+      return `<div class="h-bar-row" style="margin-bottom:0.65rem;align-items:flex-start">
+        <span style="font-size:0.74rem;color:var(--text);width:200px;min-width:200px;max-width:200px;flex-shrink:0;white-space:normal;line-height:1.4">${esc(d.label)}</span>
+        <div style="flex:1;min-width:80px">
+          <div style="height:22px;background:var(--card-border);border-radius:4px;overflow:hidden;display:flex">${segs}</div>
+          <div style="font-size:0.62rem;color:var(--text-muted);text-align:right;margin-top:2px">n=${d.t}</div>
+        </div>
+      </div>`;
+    }).join('');
+    const hLegend = _allHFreqs.map((v,i)=>`<div class="legend-item"><div class="legend-dot" style="background:${HOST_PAL[i%HOST_PAL.length]}"></div>${esc(v)}</div>`).join('');
+    html += `<div class="chart-card"><div class="chart-card-title">Hosting Frequency at Office</div><div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem">How frequently do you host each of the following groups in the office?</div><div class="stacked-chart">${hBars}</div><div class="chart-legend">${hLegend}</div></div>`;
+  }
 
   // HYBMTG: virtual participation in in-office meetings
   if (C.HYBMTG && colIdx[C.HYBMTG] !== undefined) {
