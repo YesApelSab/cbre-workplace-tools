@@ -1393,6 +1393,17 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     )) { C.ROLE = code.trim(); roleFound = true; }
   });
 
+  // De-conflict: if two demographic slots ended up on the same column (e.g. C.GEN defaulted to Q5
+  // and ROLE detection also assigned Q5), clear the lower-priority slot.
+  // Priority: DEPT > ROLE > TENURE > GEN > FREQOFF
+  (function deconflictSlots() {
+    const claimed = new Set();
+    [['DEPT',C.DEPT],['ROLE',C.ROLE],['TENURE',C.TENURE],['GEN',C.GEN],['FREQOFF',C.FREQOFF]].forEach(([slot,col]) => {
+      if (!col) return;
+      if (claimed.has(col)) { C[slot] = ''; } else { claimed.add(col); }
+    });
+  })();
+
   // Detect workspace/commute columns by question text so codes stay correct when Q-numbers shift
   let assignedWsFound = false, wsTypeFound = false, commuteTimeFound = false, commuteModeFound = false;
   codes.forEach((code, i) => {
