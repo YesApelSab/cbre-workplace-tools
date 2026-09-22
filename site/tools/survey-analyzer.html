@@ -3502,6 +3502,20 @@ function renderRel() {
     const ctEntries = Object.entries(ctCounts);
     if (ctEntries.length > 0) {
       const ctTotal = rows.length;
+      // Empirical max: highest number of Q13 columns any single respondent checked.
+      // More accurate than C.Q13.length (which is the option count, not the selection limit).
+      let ctMaxSel = 0;
+      rows.forEach(r => {
+        let sel = 0;
+        C.Q13.forEach(col => {
+          const v = gv(r, col);
+          if (!v || !v.trim() || v.trim() === '0') return;
+          const ol = colMetaMap[col] || '';
+          if (/^n\/a\b|do not often|don.t often/i.test(ol)) return;
+          sel++;
+        });
+        if (sel > ctMaxSel) ctMaxSel = sel;
+      });
       const ctSorted = ctEntries.sort((a, b) => {
         const aOther = /^(n\/a|i do not|none|other)/i.test(a[0].trim());
         const bOther = /^(n\/a|i do not|none|other)/i.test(b[0].trim());
@@ -3520,7 +3534,7 @@ function renderRel() {
           <span style="font-size:0.72rem;color:var(--text-muted);min-width:65px;text-align:right">${n} (${w}%)</span>
         </div>`;
       }).join('');
-      html += `<div class="chart-card"><div class="chart-card-title">Top Collaborators by Division / Department <span>N=${ctTotal} respondents, up to ${C.Q13.length} selections each</span></div><div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem">Which other business units or departments do respondents work with most frequently?</div>${ctBars}</div>`;
+      html += `<div class="chart-card"><div class="chart-card-title">Top Collaborators by Division / Department <span>N=${ctTotal} respondents, up to ${ctMaxSel} selections each</span></div><div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem">Which other business units or departments do respondents work with most frequently?</div>${ctBars}</div>`;
     }
   }
 
