@@ -3501,10 +3501,11 @@ function renderRel() {
     });
     const ctEntries = Object.entries(ctCounts);
     if (ctEntries.length > 0) {
-      const ctTotal = rows.length;
-      // Empirical max: highest number of Q13 columns any single respondent checked.
-      // More accurate than C.Q13.length (which is the option count, not the selection limit).
+      // ctTotal = respondents who answered Q13 (checked at least one option, excluding N/A).
+      // Using only answerers as denominator so percentages reflect actual respondent share,
+      // not the full filtered pool which includes people who skipped the question entirely.
       let ctMaxSel = 0;
+      let ctTotal = 0;
       rows.forEach(r => {
         let sel = 0;
         C.Q13.forEach(col => {
@@ -3514,6 +3515,7 @@ function renderRel() {
           if (/^n\/a\b|do not often|don.t often/i.test(ol)) return;
           sel++;
         });
+        if (sel > 0) ctTotal++;
         if (sel > ctMaxSel) ctMaxSel = sel;
       });
       const ctSorted = ctEntries.sort((a, b) => {
