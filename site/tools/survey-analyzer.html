@@ -2243,7 +2243,7 @@ function initApp() {
   const _snap = window.__PRELOADED__ && window.__PRELOADED__.filterSnapshot;
   if (_snap) { restoreFilterSnapshot(_snap); } else { buildFilters(); }
   applyFilters();
-  checkColumns();
+  if (!window.__PRELOADED__) checkColumns();
   const p2 = window.__PRELOADED__;
   if (!p2 || !p2.customQuestions) loadCustomQuestionsFromStorage();
 }
@@ -5870,6 +5870,7 @@ function downloadClientPackage() {
   var pkgBtn=document.getElementById('clientPkgBtn');if(pkgBtn)pkgBtn.remove();
   var pdfBtn=document.querySelector('button[onclick="exportPDFReport()"]');if(pdfBtn)pdfBtn.remove();
   var cw=document.getElementById('columnWarning');if(cw)cw.style.display='none';
+  var pl=document.querySelector('.prelaunch-section');if(pl)pl.remove();
   var expInstr=document.querySelector('.export-instructions');if(expInstr)expInstr.remove();
   var zone=document.getElementById('uploadZone');
   if(zone){
