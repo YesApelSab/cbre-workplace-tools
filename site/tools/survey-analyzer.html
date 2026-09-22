@@ -2980,7 +2980,7 @@ function renderExecSummary() {
   if (worstSupply && worstSupply.insuffPct > 0) {
     const nonePart = worstSupply.nonePct > 0 ? ` (${worstSupply.nonePct}% have none, ${worstSupply.tooLittlePct}% say too little)` : ` (${worstSupply.tooLittlePct}% say too little)`;
     spaceIns.push(worstSupply.insuffPct >= 40
-      ? { icon:'⚠️', text:`<strong>${worstSupply.insuffPct}% of respondents say ${worstSupply.label.toLowerCase()} are insufficient</strong>${nonePart} — the most cited supply gap and highest-priority space addition to consider.` }
+      ? { icon:'⚠️', text:`<strong>${worstSupply.insuffPct}% of respondents say ${worstSupply.label.toLowerCase()} are insufficient</strong>${nonePart} — the most cited supply gap in this dataset.` }
       : { icon:'📦', text:`<strong>${worstSupply.label}</strong> has the largest perceived shortage, with ${worstSupply.insuffPct}% reporting insufficient supply${nonePart}. ${bestSupply.rightPct > 60 ? `By contrast, ${bestSupply.label.toLowerCase()} are widely seen as well-stocked (${bestSupply.rightPct}% right amount).` : ''}` });
   }
   if (lowestFunc) spaceIns.push({ icon:'🔧', text:`<strong>${lowestFunc.label}</strong> is the lowest-rated functionality item (avg ${lowestFunc.avg?.toFixed(1)}/4). <strong>${highestFunc?.label}</strong> scores highest at ${highestFunc?.avg?.toFixed(1)}/4.` });
@@ -2998,7 +2998,7 @@ function renderExecSummary() {
   const topLearn   = learnItems.length ? [...learnItems].sort((a,b)=>toNum(b.avg)-toNum(a.avg))[0] : null;
   const relIns = [];
   if (timeWithOthers > 0) { const collab = timeWithOthers>=60?'highly collaborative':timeWithOthers>=40?'balanced':'individually oriented'; relIns.push({ icon:'🤝', text:`Employees spend <strong>${timeWithOthers}% of work time with others</strong>, characterizing the workforce as <strong>${collab}</strong>. ${unscheduledPct>40?`${unscheduledPct}% of that time is unscheduled — spontaneous interaction is a key feature of the workplace.`:`Most collaboration (${scheduledPct}%) is planned and scheduled.`}` }); }
-  if (lowestRel && highestRel) relIns.push({ icon:'👥', text:`<strong>${lowestRel.label}</strong> is the lowest-rated relationship dimension (avg ${lowestRel.avg?.toFixed(1)||'—'}/4) and highest-priority connection to strengthen. <strong>${highestRel.label}</strong> scores strongest at ${highestRel.avg?.toFixed(1)||'—'}/4.` });
+  if (lowestRel && highestRel) relIns.push({ icon:'👥', text:`<strong>${lowestRel.label}</strong> is the lowest-rated relationship dimension (avg ${lowestRel.avg?.toFixed(1)||'—'}/4). <strong>${highestRel.label}</strong> scores strongest at ${highestRel.avg?.toFixed(1)||'—'}/4.` });
   if (topLearn) relIns.push({ icon:'📚', text:`The most important in-office activity is <strong>${topLearn.label}</strong> (${topLearn.avg?.toFixed(1)||'—'}/4).` });
   html += insightCard('🤝', 'Relationships & Collaboration', relIns);
 
@@ -3189,7 +3189,7 @@ function renderSpace() {
   if (worstSupply && worstSupply.insuffPct > 0) {
     const nonePart = worstSupply.nonePct > 0 ? ` (${worstSupply.nonePct}% have none, ${worstSupply.tooLittlePct}% say too little)` : ` (${worstSupply.tooLittlePct}% say too little)`;
     if (worstSupply.insuffPct >= 40) {
-      spaceInsights.push({ icon:'⚠️', text:`<strong>${worstSupply.insuffPct}% of respondents say ${worstSupply.label.toLowerCase()} are insufficient</strong>${nonePart} — the most cited supply gap and the highest-priority space addition to consider.` });
+      spaceInsights.push({ icon:'⚠️', text:`<strong>${worstSupply.insuffPct}% of respondents say ${worstSupply.label.toLowerCase()} are insufficient</strong>${nonePart} — the most cited supply gap in this dataset.` });
     } else {
       spaceInsights.push({ icon:'📦', text:`<strong>${worstSupply.label}</strong> has the largest perceived shortage, with ${worstSupply.insuffPct}% of respondents reporting insufficient supply${nonePart}. ${bestSupply.rightPct > 60 ? `By contrast, ${bestSupply.label.toLowerCase()} are widely seen as well-stocked (${bestSupply.rightPct}% right amount).` : ''}` });
     }
@@ -3385,7 +3385,7 @@ function renderRel() {
   }
 
   if (lowestRel && highestRel) {
-    relInsights.push({ icon:'👥', text:`<strong>${lowestRel.label}</strong> is the lowest-rated relationship dimension (avg ${lowestRel.avg?.toFixed(1)||'—'}/4) and the highest-priority connection to strengthen. <strong>${highestRel.label}</strong> scores strongest at ${highestRel.avg?.toFixed(1)||'—'}/4.` });
+    relInsights.push({ icon:'👥', text:`<strong>${lowestRel.label}</strong> is the lowest-rated relationship dimension (avg ${lowestRel.avg?.toFixed(1)||'—'}/4). <strong>${highestRel.label}</strong> scores strongest at ${highestRel.avg?.toFixed(1)||'—'}/4.` });
   }
 
   if (topLearn && topSocial) {
