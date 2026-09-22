@@ -2238,6 +2238,13 @@ function initApp() {
     writeInCols           = p.writeInCols           || [];
     writeInByParent       = p.writeInByParent       || {};
     if (p.cOverrides) Object.assign(C, p.cOverrides);
+    // Enforce which demographic slots were actually detected — clears any slot the analyst UI
+    // did not confirm, regardless of C defaults, so omitted questions never render as cards.
+    if (Array.isArray(p.detectedDemoSlots)) {
+      ['DEPT','ROLE','GEN','TENURE','FREQOFF'].forEach(slot => {
+        if (!p.detectedDemoSlots.includes(slot)) C[slot] = '';
+      });
+    }
     if (p.customQuestions) customQuestions = p.customQuestions;
     const m = p.meta || {};
     const cn = document.getElementById('clientName');
@@ -3142,6 +3149,7 @@ function renderDemo() {
 
   let html = '';
   COLS.forEach(({ col, label, order }) => {
+    if (!col) return;
     const counts = countBy(rows, col);
     if (!Object.keys(counts).length) return;
     let ents = Object.entries(counts);
@@ -5849,6 +5857,8 @@ function downloadClientPackage() {
     const v = C[k];
     if (typeof v === 'string' || Array.isArray(v)) cOverrides[k] = v;
   });
+  // Record which demographic slots were actually detected so the client package can enforce them.
+  const detectedDemoSlots = ['DEPT','ROLE','GEN','TENURE','FREQOFF'].filter(k => !!C[k]);
 
   // Snapshot the exact filter bar state the analyst sees — labels, options, visibility.
   // The client package restores this verbatim so no re-derivation can produce wrong filters.
@@ -5865,7 +5875,7 @@ function downloadClientPackage() {
   }).filter(Boolean);
 
   // Escape closing-script tags in JSON to avoid breaking the injected script block
-  const dataJson = JSON.stringify({ allRows, colIdx, qTextsMap, colMetaMap, extraDemoColumns, allCategoricalColumns, writeInCols, writeInByParent, cOverrides, customQuestions, filterSnapshot, meta: { clientName, sector, headcount } })
+  const dataJson = JSON.stringify({ allRows, colIdx, qTextsMap, colMetaMap, extraDemoColumns, allCategoricalColumns, writeInCols, writeInByParent, cOverrides, detectedDemoSlots, customQuestions, filterSnapshot, meta: { clientName, sector, headcount } })
                     .replace(/<\/script>/gi, '<\\/script>');
 
   const preloadScript = `<script>window.__PRELOADED__=${dataJson};<\/script>`;
