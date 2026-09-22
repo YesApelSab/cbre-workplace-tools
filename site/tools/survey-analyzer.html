@@ -1393,8 +1393,17 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     )) { C.ROLE = code.trim(); roleFound = true; }
   });
 
-  // De-conflict: if two demographic slots ended up on the same column (e.g. C.GEN defaulted to Q5
-  // and ROLE detection also assigned Q5), clear the lower-priority slot.
+  // If detection found at least one demographic column, treat detection as authoritative:
+  // clear any slot whose default was never confirmed by detection. This prevents a default
+  // like C.GEN='Q5' from rendering a card when the survey has no Generation question.
+  if (deptFound || roleFound || genFound || tenureFound) {
+    if (!deptFound)   C.DEPT    = '';
+    if (!roleFound)   C.ROLE    = '';
+    if (!genFound)    C.GEN     = '';
+    if (!tenureFound) C.TENURE  = '';
+  }
+
+  // De-conflict: if two slots still point to the same column, clear the lower-priority one.
   // Priority: DEPT > ROLE > TENURE > GEN > FREQOFF
   (function deconflictSlots() {
     const claimed = new Set();
