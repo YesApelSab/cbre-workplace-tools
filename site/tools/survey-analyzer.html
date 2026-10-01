@@ -3637,7 +3637,7 @@ function renderRel() {
         <span style="font-size:0.72rem;color:var(--text-muted);min-width:65px;text-align:right">${n} (${w}%)</span>
       </div>`;
     }).join('');
-    html += `<div class="chart-card"><div class="chart-card-title">Colleague Name Recognition <span>How often do you recognize by name someone you pass in the hallway? · N=${q34Tot}</span></div>${q34Bars}</div>`;
+    html += `<div class="chart-card"><div class="chart-card-title">Colleague Name Recognition <span>N=${q34Tot}</span></div><div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem">${qLabel(C.Q34,'How often do you recognize by name someone you pass in the hallway?')}</div>${q34Bars}</div>`;
   }
 
   // Collaboration free text (Q32)
