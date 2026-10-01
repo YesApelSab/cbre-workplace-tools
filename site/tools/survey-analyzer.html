@@ -2704,7 +2704,7 @@ function renderCustomCharts(sectionKey) {
         w: (counts[i]/n)*100, label: sl, color: scaleColors[i], light: i >= 2
       }));
       html += `<div class="chart-card">
-        <div class="chart-card-title">${label} <span>avg ${avg.toFixed(1)}/4 · N=${n}</span></div>
+        <div class="chart-card-title">${label} <span>avg ${avg.toFixed(1)}/4</span></div>
         <div class="stacked-chart">
           <div class="bar-row">
             <div class="bar-track-wrap">
@@ -2744,7 +2744,7 @@ function renderCustomCharts(sectionKey) {
         </div>`;
       }).join('');
       html += `<div class="chart-card">
-        <div class="chart-card-title">${label} <span>N=${n}</span></div>
+        <div class="chart-card-title">${label}</div>
         <div class="stacked-chart">${bars}</div>
       </div>`;
 
@@ -3183,7 +3183,7 @@ function renderDemo() {
       </div>`;
     }).join('');
     const hasOtherOpt = ents.some(([v]) => /^other\b/i.test(v.trim()));
-    html += `<div class="chart-card"><div class="chart-card-title">${label} <span>N=${tot}</span></div>${bars}${hasOtherOpt ? inlineOtherBlock(col) : ''}</div>`;
+    html += `<div class="chart-card"><div class="chart-card-title">${label}</div>${bars}${hasOtherOpt ? inlineOtherBlock(col) : ''}</div>`;
   });
   document.getElementById('demoCharts').innerHTML = html || '<div class="empty-state">No data for current filters.</div>';
   insertCustomChartsBlock('demoCharts', 'demographics');
@@ -3592,7 +3592,7 @@ function renderRel() {
           <span style="font-size:0.72rem;color:var(--text-muted);min-width:65px;text-align:right">${n} (${w}%)</span>
         </div>`;
       }).join('');
-      html += `<div class="chart-card"><div class="chart-card-title">Top Collaborators by Division / Department <span>N=${ctTotal} respondents, up to ${ctMaxSel} selections each</span></div><div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem">Which other business units or departments do respondents work with most frequently?</div>${ctBars}</div>`;
+      html += `<div class="chart-card"><div class="chart-card-title">Top Collaborators by Division / Department</div><div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem">Which other business units or departments do respondents work with most frequently?</div>${ctBars}</div>`;
     }
   }
 
@@ -3617,7 +3617,7 @@ function renderRel() {
         <span style="font-size:0.72rem;color:var(--text-muted);min-width:65px;text-align:right">${n} (${w}%)</span>
       </div>`;
     }).join('');
-    html += `<div class="chart-card"><div class="chart-card-title">1:1 Meeting Frequency with Manager <span>N=${q31Tot}</span></div>${q31Bars}</div>`;
+    html += `<div class="chart-card"><div class="chart-card-title">1:1 Meeting Frequency with Manager</div>${q31Bars}</div>`;
   }
 
   // Hallway Recognition (Q34)
@@ -3637,7 +3637,7 @@ function renderRel() {
         <span style="font-size:0.72rem;color:var(--text-muted);min-width:65px;text-align:right">${n} (${w}%)</span>
       </div>`;
     }).join('');
-    html += `<div class="chart-card"><div class="chart-card-title">Colleague Name Recognition <span>N=${q34Tot}</span></div><div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem">${qLabel(C.Q34,'How often do you recognize by name someone you pass in the hallway?')}</div>${q34Bars}</div>`;
+    html += `<div class="chart-card"><div class="chart-card-title">Colleague Name Recognition</div><div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.75rem">${qLabel(C.Q34,'How often do you recognize by name someone you pass in the hallway?')}</div>${q34Bars}</div>`;
   }
 
   // Collaboration free text (Q32)
@@ -5023,7 +5023,7 @@ function renderSentiment() {
     sc += `</svg>`;
 
     html += `<div class="chart-card" style="margin-bottom:0.9rem">
-      <div class="chart-card-title">NPS vs. Satisfaction <span>N=${scatterData.length} · NPS ${nps !== null ? (nps>=0?'+':'')+nps : '—'}</span></div>
+      <div class="chart-card-title">NPS vs. Satisfaction <span>NPS ${nps !== null ? (nps>=0?'+':'')+nps : '—'}</span></div>
       <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.8rem">Each bubble represents respondents with the same NPS and Satisfaction scores. Bubble size = number of respondents. X-axis = eNPS (0–10). Y-axis = workplace satisfaction (0–10).</div>
       ${sc}
     </div>`;
@@ -5467,7 +5467,7 @@ body{font-family:'DM Sans',Arial,sans-serif;background:#fff;color:#1A2E24;font-s
         ents.sort((a,b) => { const ai=normOrder.indexOf(normOrd(a[0])),bi=normOrder.indexOf(normOrd(b[0])); return (ai<0?99:ai)-(bi<0?99:bi); });
       } else ents.sort((a,b) => b[1]-a[1]);
       const tot = ents.reduce((s,[,v]) => s+v, 0);
-      dHtml += `<div class="nb" style="margin-bottom:14px"><div style="font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#7A9590;margin-bottom:7px">${label} · N=${tot}</div>`;
+      dHtml += `<div class="nb" style="margin-bottom:14px"><div style="font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#7A9590;margin-bottom:7px">${label}</div>`;
       ents.forEach(([v,cnt], i) => {
         const w = pct(cnt, tot);
         dHtml += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
