@@ -1439,6 +1439,14 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     )) { C.Q15 = code.trim(); commuteModeFound = true; }
   });
 
+  // If commute mode was never detected, clear the default so the card doesn't render
+  // with a stale default column code that belongs to something else in this survey.
+  if (!commuteModeFound) C.Q15 = '';
+  // Same for other optional workspace/commute columns.
+  if (!commuteTimeFound) C.COMMUTE = '';
+  if (!assignedWsFound) C.Q11 = '';
+  if (!wsTypeFound) C.Q12 = '';
+
   // Q26: specialty space verbatim — detect by question text
   let q26Found = !!C.Q26 && C.Q26 !== 'SPECREQ.A1';
   if (!q26Found) {
