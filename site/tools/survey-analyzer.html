@@ -3945,7 +3945,6 @@ function renderFuture() {
     </div>
     <div style="display:grid;grid-template-columns:repeat(${Math.min(visEnts.length,5)},1fr);gap:0.6rem">${tiles}</div>
     ${buckets}
-    ${skipN > 0 ? `<div class="loc-footnote" style="margin-top:0.9rem">† ${locTotal} of ${n} respondents answered this question; ${skipN} skipped or left it blank.</div>` : ''}
     ${inlineOtherBlock(C.Q45)}
   </div>`;
 
