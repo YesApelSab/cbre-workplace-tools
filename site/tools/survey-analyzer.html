@@ -3995,8 +3995,8 @@ function renderFuture() {
     <div class="tradeoff-pies">`;
 
   td.forEach(d => {
-    const agreeN   = (d.d[4]||0) + (d.d[3]||0);
-    const agreePct = d.t ? pct(agreeN, d.t) : 0;
+    // Sum the individually-rounded segment percentages so the center matches the legend.
+    const agreePct = (d.t ? pct(d.d[4]||0, d.t) : 0) + (d.t ? pct(d.d[3]||0, d.t) : 0);
     const segs     = [4,3,2,1].map((s,i) => ({value:d.d[s]||0, color:L5_COLORS[3-i]}));
     html += `<div class="tradeoff-pie-card">
       <div class="tradeoff-pie-title">${d.label}</div>
@@ -4511,8 +4511,7 @@ function exportTradeoffPNG() {
   g += `<text x="${W/2}" y="18" text-anchor="middle" font-size="12" font-weight="700" fill="#F2F4F3">Trade-off Preferences</text>`;
   g += `<text x="${W/2}" y="33" text-anchor="middle" font-size="8.5" fill="#80BBAD">Rated on a 1–4 scale · Center = % who Agree or Strongly Agree</text>`;
   td.forEach((d, idx) => {
-    const agreeN = (d.d[4]||0) + (d.d[3]||0);
-    const agreePct = d.t ? Math.round((agreeN / d.t) * 100) : 0;
+    const agreePct = (d.t ? Math.round(((d.d[4]||0)/d.t)*100) : 0) + (d.t ? Math.round(((d.d[3]||0)/d.t)*100) : 0);
     const cx = pad + idx * cardW + cardW / 2, pieY = 50, cy = pieY + pieSize / 2;
     const r = pieSize / 2 - 14;
     // Title (max 2 lines ~22 chars each)
