@@ -4038,7 +4038,7 @@ function renderFuture() {
       tot++;
     });
     return {label:qLabel(col, C.AMM_L[i]),off,bld,nbr,not,tot};
-  }).sort((a,b) => (b.off/Math.max(b.tot,1)) - (a.off/Math.max(a.tot,1)));
+  }).sort((a,b) => (a.not/Math.max(a.tot,1)) - (b.not/Math.max(b.tot,1)));
 
   html += `<div class="chart-card"><div class="chart-card-title">Amenity Location Importance</div><div class="stacked-chart amm-chart">`;
   ammData.forEach(({label,off,bld,nbr,not,tot}) => {
