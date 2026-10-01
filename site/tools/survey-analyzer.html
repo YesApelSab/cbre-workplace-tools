@@ -3450,8 +3450,11 @@ function renderRel() {
 
   // Hosting — use actual survey values (no bucketing), actual option labels from colMetaMap
   html += GRP_HDR('Hosting');
+  // Canonical order for keyword matching (most→least frequent); bars render reversed (Never first).
   const HOST_FREQ_ORD = ['daily','weekly','biweekly','every two','monthly','quarterly','few times','rarely','occasionally','never'];
-  const HOST_PAL = ['#17E88F','#0FB870','#80BBAD','#538184','#DBD99A','#D2785A','#8B1A1A'];
+  // Palette runs Never → Daily (left to right): red → orange → yellow → grey → blue → sage → bright green.
+  // Biweekly uses vivid blue (#3B82F6) to stay clearly distinct from the sage and bright-green neighbours.
+  const HOST_PAL = ['#8B1A1A','#D2785A','#DBD99A','#538184','#3B82F6','#80BBAD','#17E88F'];
   const hd = C.HOST.map((col,i) => {
     const counts = {}; let t = 0;
     rows.forEach(r => { const v = gv(r,col).trim(); if (v) { counts[v]=(counts[v]||0)+1; t++; } });
@@ -3459,12 +3462,14 @@ function renderRel() {
     return { label, counts, t };
   }).filter(d => d.t > 0);
   const _allHFreqs = [...new Set(hd.flatMap(d => Object.keys(d.counts)))];
+  // Sort least-frequent first (Never at index 0) so bars read Never → Daily left to right.
   _allHFreqs.sort((a,b) => {
     const r = s => { const sl=s.toLowerCase(); const i=HOST_FREQ_ORD.findIndex(f=>sl.includes(f)); return i<0?99:i; };
-    return r(a)-r(b);
+    return r(b)-r(a);
   });
+  // Row sort: groups that host most frequently appear first; after reversal Daily is at high index so weight = i+1.
   hd.sort((a,b) => {
-    const sc = d => _allHFreqs.reduce((s,v,i)=>s+(d.counts[v]||0)*(_allHFreqs.length-i),0)/(d.t||1);
+    const sc = d => _allHFreqs.reduce((s,v,i)=>s+(d.counts[v]||0)*(i+1),0)/(d.t||1);
     return sc(b)-sc(a);
   });
   if (hd.length) {
