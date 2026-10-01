@@ -1685,10 +1685,13 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     const qt3 = (qTexts[i] || '').toLowerCase();
     // Also detect by column code suffix: QUESTION.OTHER, QUESTION.SPEC, QUESTION.OSPEC, QUESTION.WRITEOTHER etc.
     const codeLower = c3.toLowerCase();
+    const metaLabel3 = (colMetaMap[c3] || '').toLowerCase();
     const looksLikeWriteIn =
       (qt3.includes('other') && (qt3.includes('specify') || qt3.includes('please') || qt3.includes('write') || qt3.includes('describe') || qt3.includes('explain'))) ||
       qt3.includes('if other') || qt3.includes('please specify') || qt3.includes('write-in') || qt3.includes('write in') || qt3.includes('open ended') || qt3.includes('open-ended') ||
-      /[._](other|otext|othertext|otherspec|spec(ify)?|ospec|write(in|other)?|open)$/i.test(c3);
+      /[._](other|otext|othertext|otherspec|spec(ify)?|ospec|write(in|other)?|open)$/i.test(c3) ||
+      /[._][a-z]*other$/i.test(c3) ||
+      (metaLabel3 && metaLabel3.includes('other') && (metaLabel3.includes('specify') || metaLabel3.includes('please') || metaLabel3.includes('explain') || metaLabel3.includes('write')));
     if (!looksLikeWriteIn) return;
     const responses = [];
     for (let j = 0; j < dataRows.length; j++) {
@@ -1706,7 +1709,7 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
   // the companion column for any chart that has an "Other" option.
   writeInByParent = {};
   writeInCols.forEach(w => {
-    const stripped = w.code.replace(/[._]?(otext|othertext|otherspec|other|spec(ify)?|ospec|write(in|other)?|open)$/i, '');
+    const stripped = w.code.replace(/[._]?([a-z]*other|otext|othertext|otherspec|spec(ify)?|ospec|write(in|other)?|open)$/i, '');
     if (stripped && stripped.toLowerCase() !== w.code.toLowerCase()) {
       writeInByParent[stripped.toLowerCase()] = w;
     }
@@ -2068,7 +2071,16 @@ function buildDiagnostics() {
   extraDemoColumns.forEach(({ code }) => claimedCodes.add(code));
 
   const unrecognized = Object.keys(colIdx)
-    .filter(code => !claimedCodes.has(code))
+    .filter(code => {
+      if (claimedCodes.has(code)) return false;
+      // Silently exclude numeric percentage-sum validation columns (e.g. VIBE.A3, MTGSIZE.A4)
+      if (/\.[A-Z]\d+$/i.test(code)) {
+        const ci = colIdx[code];
+        const vals = allRows.map(r => (r[ci] || '').trim()).filter(v => v);
+        if (vals.length && vals.every(v => /^\d+(\.\d+)?$/.test(v))) return false;
+      }
+      return true;
+    })
     .map(code => ({ code, label: (qTextsMap[code] || '').slice(0, 100) }));
 
   return { n: allRows.length, sections, singles: SINGLES, obenAutoDetected: obenWasAutoDetected, obenSlots, writeIns: writeInCols, unrecognized };
@@ -3332,7 +3344,7 @@ function renderSpace() {
     };
     html += `<div class="two-col">`;
     if (Object.keys(lunFreqCounts).length) html += `<div class="chart-card"><div class="chart-card-title">Lunch Frequency</div>${barSet(lunFreqCounts)}</div>`;
-    if (Object.keys(lunLocCounts).length) html += `<div class="chart-card"><div class="chart-card-title">Where Employees Eat</div>${barSet(lunLocCounts)}</div>`;
+    if (Object.keys(lunLocCounts).length) html += `<div class="chart-card"><div class="chart-card-title">Where Employees Eat</div>${barSet(lunLocCounts)}${inlineOtherBlock(C.LUNLOCAL)}</div>`;
     // Tech card inside same two-col
     const techCounts = countBy(rows, C.TECHNEED);
     if (Object.keys(techCounts).length) {
@@ -3970,6 +3982,7 @@ function renderFuture() {
         ${benefitChips(ob, '#17E88F')}
       </div>
     </div>
+    ${inlineOtherBlock('RPOTBEN')}${inlineOtherBlock('OPOTBEN')}
   </div>`;
 
   // ── Trade-offs ────────────────────────────────────────────────────────
