@@ -3075,7 +3075,7 @@ function renderExecSummary() {
   const rb = C.RBEN.map((col,i)=>({label:qLabel(col, C.RBEN_L[i]),p:cbPct(rows,col)})).sort((a,b)=>b.p-a.p);
   const ob = C.OBEN.map((col,i)=>({label:qLabel(col, C.OBEN_L[i]),p:cbPct(rows,col)})).sort((a,b)=>b.p-a.p);
   const futIns = [];
-  if (locTotal > 0) { let locS=''; if(officePct>=50)locS=`<strong>${officePct}% prefer office-dominant arrangements</strong>, signaling continued demand for dedicated workspace.`; else if(remotePct>=50)locS=`<strong>${remotePct}% prefer remote-dominant arrangements</strong>, suggesting strong appetite for flexible/distributed work.`; else if(hybridPct>=35)locS=`<strong>Hybrid is the dominant preference at ${hybridPct}%</strong>, with office-leaning at ${officePct}% and remote-leaning at ${remotePct}%.`; else locS=`<strong>Work location preferences are split</strong> — office-leaning ${officePct}%, hybrid ${hybridPct}%, remote-leaning ${remotePct}%.`; futIns.push({ icon:'📍', text:locS }); }
+  if (locTotal > 0) { let locS=''; const _dc=officePct>=remotePct&&officePct>=hybridPct?'office':remotePct>=hybridPct?'remote':'hybrid'; if(_dc==='office'&&officePct>=35)locS=`<strong>${officePct}% prefer office-dominant arrangements</strong>, signaling continued demand for dedicated workspace.`; else if(_dc==='remote'&&remotePct>=35)locS=`<strong>Remote-leaning is the dominant preference at ${remotePct}%</strong>, with hybrid at ${hybridPct}% and office-leaning at ${officePct}%.`; else if(_dc==='hybrid'&&hybridPct>=35)locS=`<strong>Hybrid is the dominant preference at ${hybridPct}%</strong>, with remote-leaning at ${remotePct}% and office-leaning at ${officePct}%.`; else locS=`<strong>Work location preferences are split</strong> — office-leaning ${officePct}%, hybrid ${hybridPct}%, remote-leaning ${remotePct}%.`; futIns.push({ icon:'📍', text:locS }); }
   if (rb.length && rb[0].p>0) futIns.push({ icon:'🏠', text:`<strong>${rb[0].label} (${rb[0].p}%)</strong> is the top remote work benefit — hybrid policies should preserve this advantage.` });
   if (ob.length && ob[0].p>0) futIns.push({ icon:'🏢', text:`<strong>${ob[0].label} (${ob[0].p}%)</strong> is the leading reason employees come to the office — design the in-office experience around this driver.` });
   html += insightCard('🔭', 'Future Preferences', futIns);
@@ -3885,13 +3885,13 @@ function renderFuture() {
 
   if (locTotal > 0) {
     let locSentence = '';
-    // Office/remote are aggregates of two options each; require ≥50% for them to dominate.
-    // A single hybrid option at ≥35% counts as dominant when neither aggregate hits majority.
-    if (officePct >= 50) {
+    const _domCat = officePct >= remotePct && officePct >= hybridPct ? 'office'
+                  : remotePct >= hybridPct ? 'remote' : 'hybrid';
+    if (_domCat === 'office' && officePct >= 35) {
       locSentence = `<strong>${officePct}% of respondents prefer office-dominant arrangements</strong> (Mostly office or Fully office), signaling continued demand for dedicated workspace.`;
-    } else if (remotePct >= 50) {
+    } else if (_domCat === 'remote' && remotePct >= 35) {
       locSentence = `<strong>Remote-leaning is the dominant preference at ${remotePct}%</strong> (Mostly home or Fully remote), with hybrid at ${hybridPct}% and office-leaning at ${officePct}%.`;
-    } else if (hybridPct >= 35) {
+    } else if (_domCat === 'hybrid' && hybridPct >= 35) {
       locSentence = `<strong>Hybrid is the dominant preference at ${hybridPct}%</strong> (Equal mix), with remote-leaning at ${remotePct}% and office-leaning at ${officePct}%.`;
     } else {
       locSentence = `<strong>Work location preferences are split</strong> — office-leaning ${officePct}%, hybrid ${hybridPct}%, and remote-leaning ${remotePct}%, indicating no single dominant model.`;
