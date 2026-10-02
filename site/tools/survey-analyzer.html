@@ -2273,6 +2273,7 @@ function initApp() {
     allCategoricalColumns = p.allCategoricalColumns || [];
     writeInCols           = p.writeInCols           || [];
     writeInByParent       = p.writeInByParent       || {};
+    _inlineShownWriteIns  = new Set(p.inlineShownWriteIns || []);
     if (p.cOverrides) Object.assign(C, p.cOverrides);
     // Enforce which demographic slots were actually detected — clears any slot the analyst UI
     // did not confirm, regardless of C defaults, so omitted questions never render as cards.
@@ -5923,7 +5924,7 @@ function downloadClientPackage() {
   }).filter(Boolean);
 
   // Escape closing-script tags in JSON to avoid breaking the injected script block
-  const dataJson = JSON.stringify({ allRows, colIdx, qTextsMap, colMetaMap, extraDemoColumns, allCategoricalColumns, writeInCols, writeInByParent, cOverrides, detectedDemoSlots, customQuestions, filterSnapshot, meta: { clientName, sector, headcount } })
+  const dataJson = JSON.stringify({ allRows, colIdx, qTextsMap, colMetaMap, extraDemoColumns, allCategoricalColumns, writeInCols, writeInByParent, inlineShownWriteIns: [..._inlineShownWriteIns], cOverrides, detectedDemoSlots, customQuestions, filterSnapshot, meta: { clientName, sector, headcount } })
                     .replace(/<\/script>/gi, '<\\/script>');
 
   const preloadScript = `<script>window.__PRELOADED__=${dataJson};<\/script>`;
@@ -5940,6 +5941,7 @@ function downloadClientPackage() {
   var pl=document.querySelector('.prelaunch-section');if(pl)pl.remove();
   var af=document.getElementById('addFilterBtn');if(af)af.remove();
   var cqBtn=document.querySelector('button[onclick="showCustomQuestionsPanel()"]');if(cqBtn)cqBtn.remove();
+  var diagBtn=document.querySelector('button[onclick="reopenDiagnostics()"]');if(diagBtn)diagBtn.remove();
   var expInstr=document.querySelector('.export-instructions');if(expInstr)expInstr.remove();
   var zone=document.getElementById('uploadZone');
   if(zone){
