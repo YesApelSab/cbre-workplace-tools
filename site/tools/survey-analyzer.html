@@ -1100,6 +1100,7 @@ let filteredRows = [];
 let extraDemoColumns = [];
 let writeInCols = [];
 let writeInByParent = {}; // parentCodePrefix → writeInCols entry (built after writeInCols)
+let _inlineShownWriteIns = new Set(); // codes already rendered inline; excluded from buildWriteInHtml()
 let qTextsMap = {};
 let allCategoricalColumns = [];
 let customQuestions = []; // [{id, code, label, scaleType, section}]
@@ -1675,6 +1676,7 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
   // Write-in verbatim columns: free-text "Other (specify)" companions
   // Detect columns not already claimed whose question text suggests an open-ended "Other" field
   writeInCols = [];
+  _inlineShownWriteIns = new Set();
   const allClaimedForWriteIn = new Set(Object.values(C).flatMap(v =>
     typeof v === 'string' ? [v] : Array.isArray(v) ? v.filter(x => typeof x === 'string') : []
   ));
@@ -2794,7 +2796,10 @@ function inlineOtherBlock(parentKey, otherCheckboxCol) {
         if (k.startsWith(wkn) || wkn.startsWith(k.slice(0, Math.min(k.length, 5)))) { w = wv; break; }
       }
     }
-    if (w) responses = filteredRows.map(r => (gv(r, w.code) || '').trim()).filter(Boolean);
+    if (w) {
+      responses = filteredRows.map(r => (gv(r, w.code) || '').trim()).filter(Boolean);
+      if (responses.length) _inlineShownWriteIns.add(w.code);
+    }
   }
 
   // 2. Fallback: extract free-text from the "Other" checkbox column itself
@@ -2823,6 +2828,7 @@ function buildWriteInHtml() {
   const VLIM = 20;
   let out = '';
   writeInCols.forEach(({ code, label }) => {
+    if (_inlineShownWriteIns.has(code)) return; // already rendered inline after its parent chart
     const responses = filteredRows.map(r => (gv(r, code) || '').trim()).filter(Boolean);
     const uniq = [...new Set(responses)];
     if (!uniq.length) return;
