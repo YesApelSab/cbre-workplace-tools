@@ -1719,6 +1719,20 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     if (prefix && !writeInByParent[prefix]) writeInByParent[prefix] = w;
   });
 
+  // Pre-mark write-ins whose parents are known inline render sites so buildWriteInHtml()
+  // skips them regardless of which section tab renders first (render-order independent).
+  const _knownInlineParents = new Set([
+    'noisesrc', 'rpotben', 'opotben',
+    ...[C.Q45, C.LUNLOCAL, C.WKSCHED, C.FREQOFF, C.TLOCAL, C.MLOCAL,
+        C.Q11, C.Q12, C.COMMUTE, C.Q15]
+      .filter(v => typeof v === 'string' && v)
+      .map(v => v.toLowerCase()),
+  ]);
+  writeInCols.forEach(w => {
+    const pfx = w.code.split(/[._]/)[0].toLowerCase();
+    if (_knownInlineParents.has(pfx)) _inlineShownWriteIns.add(w.code);
+  });
+
   // ── Fuzzy section slot remapping ───────────────────────────────────────────
   // When a hardcoded section code (e.g. SSUPPLY.OISPACE) isn't in colIdx, try to
   // recover it by matching both question-text keywords AND actual response-value
