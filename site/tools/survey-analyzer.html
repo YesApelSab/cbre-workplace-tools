@@ -3051,6 +3051,7 @@ function renderExecSummary() {
   // ── Future Preferences ────────────────────────────────────────────────
   const locCanonical = [
     { key:'fully remote',   pat:['fully remote','fully at home'] },
+    { key:'flex remote',    pat:['remote with the option','remote with option to use'] },
     { key:'mostly home',    pat:['mostly home','mostly remote','mostly at home'] },
     { key:'equal mix',      pat:['equal mix','equally','equal split','50'] },
     { key:'mostly office',  pat:['mostly office','mostly at the office','mostly at the main'] },
@@ -3062,7 +3063,7 @@ function renderExecSummary() {
   const locEnts = Object.entries(lc).filter(([,c])=>c>0).map(([rawLabel,cnt])=>({ rawLabel, n:cnt, canon:locCanonical.find(c=>matchLC(rawLabel,c)) })).sort((a,b)=>{ const ai=locCanonical.findIndex(c=>matchLC(a.rawLabel,c)), bi=locCanonical.findIndex(c=>matchLC(b.rawLabel,c)); return (ai<0?99:ai)-(bi<0?99:bi); });
   const tilePct2 = e => locTotal ? pct(e.n, locTotal) : 0;
   const officePct = locEnts.filter(e=>e.canon&&(e.canon.key==='mostly office'||e.canon.key==='fully office')).reduce((s,e)=>s+tilePct2(e),0);
-  const remotePct = locEnts.filter(e=>e.canon&&(e.canon.key==='fully remote'||e.canon.key==='mostly home')).reduce((s,e)=>s+tilePct2(e),0);
+  const remotePct = locEnts.filter(e=>e.canon&&(e.canon.key==='fully remote'||e.canon.key==='flex remote'||e.canon.key==='mostly home')).reduce((s,e)=>s+tilePct2(e),0);
   const hybridPct = locEnts.filter(e=>e.canon&&e.canon.key==='equal mix').reduce((s,e)=>s+tilePct2(e),0);
   const rb = C.RBEN.map((col,i)=>({label:qLabel(col, C.RBEN_L[i]),p:cbPct(rows,col)})).sort((a,b)=>b.p-a.p);
   const ob = C.OBEN.map((col,i)=>({label:qLabel(col, C.OBEN_L[i]),p:cbPct(rows,col)})).sort((a,b)=>b.p-a.p);
