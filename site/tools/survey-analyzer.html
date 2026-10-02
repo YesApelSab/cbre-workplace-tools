@@ -3486,9 +3486,9 @@ function renderRel() {
   html += GRP_HDR('Hosting');
   // Canonical order for keyword matching (most→least frequent); bars render reversed (Never first).
   const HOST_FREQ_ORD = ['daily','weekly','biweekly','every two','monthly','quarterly','few times','rarely','occasionally','never'];
-  // Palette runs Never → Daily (left to right): red → orange → yellow → grey → blue → sage → bright green.
-  // Biweekly uses vivid blue (#3B82F6) to stay clearly distinct from the sage and bright-green neighbours.
-  const HOST_PAL = ['#8B1A1A','#D2785A','#DBD99A','#538184','#3B82F6','#80BBAD','#17E88F'];
+  // Palette runs Never → Daily (left to right): 7 distinct CBRE brand hues for categorical (non-Likert) data.
+  // Red → warm orange → gold → purple → teal → sage → vibrant green; all medium-toned for dark-text labels.
+  const HOST_PAL = ['#C24B4B','#C4784A','#D4AA45','#8B72A8','#538184','#80BBAD','#17E88F'];
   const hd = C.HOST.map((col,i) => {
     const counts = {}; let t = 0;
     rows.forEach(r => { const v = gv(r,col).trim(); if (v) { counts[v]=(counts[v]||0)+1; t++; } });
