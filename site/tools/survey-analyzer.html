@@ -2782,7 +2782,7 @@ function renderCustomCharts(sectionKey) {
 // parentKey = code or prefix of the parent question (e.g. 'NOISESRC', C.Q45).
 // otherCheckboxCol = optional column code of the "Other" checkbox itself (for combined format
 // where the checkbox stores free-text instead of a binary "1").
-function inlineOtherBlock(parentKey, otherCheckboxCol) {
+function inlineOtherBlock(parentKey, otherCheckboxCol, sectionLabel) {
   let responses = [];
 
   // 1. Look up a companion write-in column by parentKey prefix
@@ -2818,7 +2818,8 @@ function inlineOtherBlock(parentKey, otherCheckboxCol) {
     vhtml += `<div class="verbatim-hidden" style="display:none">${rest.map(v=>`<div class="verbatim-item">${esc(v)}</div>`).join('')}</div>`
       + `<button class="verbatim-more-btn" onclick="this.previousElementSibling.style.display='block';this.style.display='none'">Show ${rest.length} more ▼</button>`;
   }
-  return `<div class="other-writein-block"><div class="other-writein-label">Other responses <span>${uniq.length}</span></div><div class="verbatim-list">${vhtml}</div></div>`;
+  const labelText = sectionLabel ? `Other responses — ${sectionLabel}` : 'Other responses';
+  return `<div class="other-writein-block"><div class="other-writein-label">${labelText} <span>${uniq.length}</span></div><div class="verbatim-list">${vhtml}</div></div>`;
 }
 
 // Insert custom charts into a section container, before its first verbatim section if present
@@ -3987,7 +3988,7 @@ function renderFuture() {
         ${benefitChips(ob, '#17E88F')}
       </div>
     </div>
-    ${inlineOtherBlock('RPOTBEN')}${inlineOtherBlock('OPOTBEN')}
+    ${inlineOtherBlock('RPOTBEN', null, 'Why work remotely?')}${inlineOtherBlock('OPOTBEN', null, 'Why come to the office?')}
   </div>`;
 
   // ── Trade-offs ────────────────────────────────────────────────────────
