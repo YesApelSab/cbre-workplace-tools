@@ -1822,10 +1822,11 @@ function buildDensity(d) {
     if (!dn.bySc[key]) return;
     var last = dn.bySc[key][dn.bySc[key].length-1];
     var col = SC_COLORS[key];
-    var gapSign = last.sfGap>=0 ? '+' : '';
+    var gapAbs  = Math.abs(last.sfGap);
+    var gapWord = last.sfGap > 0 ? 'shortfall' : last.sfGap < 0 ? 'surplus' : 'at capacity';
     h += '<div class="density-card" style="border-color:'+col+'33;background:'+col+'0d">'
-      + '<div class="stat-val" style="color:'+col+'">'+gapSign+last.sfGap.toLocaleString()+'</div>'
-      + '<div class="stat-label" style="color:'+col+'">'+SC_LABELS[key]+' SF Gap ('+d.years[d.years.length-1]+')</div>'
+      + '<div class="stat-val" style="color:'+col+'">'+gapAbs.toLocaleString()+' SF</div>'
+      + '<div class="stat-label" style="color:'+col+'">'+SC_LABELS[key]+' '+gapWord+' ('+d.years[d.years.length-1]+')</div>'
       + '<div class="stat-sub">'+last.sfNeeded.toLocaleString()+' SF needed</div>'
       + '</div>';
   });
@@ -2686,10 +2687,11 @@ function buildFlexDashboard(d) {
          + '<div style="width:'+utilPct+'%;background:'+barCol+';height:100%;border-radius:4px;transition:width .4s"></div></div>';
       h += '<div style="font-size:.85rem;font-weight:700;color:'+(isOver?'#ff6b6b':isLow?'#538184':'#17E88F')+'">'+p.util+'%</div>';
       if (p.seatDelta !== null) {
-        var deltaSign  = p.seatDelta > 0 ? '+' : '';
-        var deltaLabel = d.model === 'assigned' ? ' desk shortfall vs. supply' : ' seats vs. supply';
-        h += '<div style="font-size:.65rem;color:rgba(242,244,243,.35);margin-top:.2rem">'
-           + deltaSign+p.seatDelta.toLocaleString()+deltaLabel+'</div>';
+        var deskWord = d.model === 'assigned' ? 'desk' : 'seat';
+        var seatSurplusWord = p.seatDelta > 0 ? 'shortfall' : 'surplus';
+        var seatDeltaCol    = p.seatDelta > 0 ? '#ff6b6b' : '#17E88F';
+        h += '<div style="font-size:.65rem;color:'+seatDeltaCol+';font-weight:600;margin-top:.2rem">'
+           + Math.abs(p.seatDelta).toLocaleString()+' '+deskWord+' '+seatSurplusWord+'</div>';
       }
     }
 
@@ -2698,9 +2700,9 @@ function buildFlexDashboard(d) {
       h += '<div style="font-size:.65rem;color:rgba(242,244,243,.35);margin-bottom:.15rem">SF needed</div>';
       h += '<div style="font-size:.85rem;font-weight:600;color:var(--text)">'+p.sfNeeded.toLocaleString()+' SF</div>';
       if (p.sfDelta !== null) {
-        var sfSign = p.sfDelta > 0 ? '+' : '';
-        var sfCol  = p.sfDelta > 0 ? '#ff6b6b' : '#17E88F';
-        h += '<div style="font-size:.65rem;color:'+sfCol+';margin-top:.15rem">'+sfSign+p.sfDelta.toLocaleString()+' SF vs. current</div>';
+        var sfSurplusWord = p.sfDelta > 0 ? 'shortfall' : 'surplus';
+        var sfCol         = p.sfDelta > 0 ? '#ff6b6b' : '#17E88F';
+        h += '<div style="font-size:.65rem;color:'+sfCol+';font-weight:600;margin-top:.15rem">'+Math.abs(p.sfDelta).toLocaleString()+' SF '+sfSurplusWord+'</div>';
       }
       h += '</div>';
     }
@@ -2895,8 +2897,8 @@ function buildFlexTable(d, hasSeats, hasSF, vibrancy, oversub) {
   var h = '<div class="chart-card"><div class="chart-title" style="margin-bottom:.85rem">Policy Comparison Table</div>'
     + '<div class="tbl-wrap"><table class="data-tbl"><thead><tr>'
     + '<th>Policy</th><th>Days/Wk</th><th>Peak Rate</th><th>Peak Occupants</th><th>'+seatsColLabel+'</th>'
-    + (hasSeats ? '<th>'+utilColLabel+'</th><th>Desk Delta</th>' : '')
-    + (hasSF    ? '<th>SF Needed</th><th>SF Delta</th>' : '')
+    + (hasSeats ? '<th>'+utilColLabel+'</th><th>Seat Surplus / Shortfall</th>' : '')
+    + (hasSF    ? '<th>SF Needed</th><th>SF Surplus / Shortfall</th>' : '')
     + '</tr></thead><tbody>';
 
   d.policies.forEach(function(p) {
@@ -2914,13 +2916,17 @@ function buildFlexTable(d, hasSeats, hasSF, vibrancy, oversub) {
     if (hasSeats) {
       var utilCol = isOver ? '#ff6b6b' : isLow ? '#538184' : '#17E88F';
       h += '<td style="color:'+utilCol+';font-weight:600">'+(p.util !== null ? p.util+'%'+statusIcon : '—')+'</td>';
-      var sd = p.seatDelta; var sdSign = sd > 0 ? '+' : '';
-      h += '<td style="color:'+(sd>0?'#ff6b6b':sd<0?'#17E88F':'rgba(242,244,243,.5)')+'">'+(sd !== null ? sdSign+sd.toLocaleString() : '—')+'</td>';
+      var sd = p.seatDelta;
+      var sdWord = sd > 0 ? 'shortfall' : sd < 0 ? 'surplus' : 'at capacity';
+      var sdCol  = sd > 0 ? '#ff6b6b' : sd < 0 ? '#17E88F' : 'rgba(242,244,243,.5)';
+      h += '<td style="color:'+sdCol+';font-weight:600">'+(sd !== null ? Math.abs(sd).toLocaleString()+' '+sdWord : '—')+'</td>';
     }
     if (hasSF) {
       h += '<td>'+(p.sfNeeded !== null ? p.sfNeeded.toLocaleString()+' SF' : '—')+'</td>';
-      var sfd = p.sfDelta; var sfdSign = sfd > 0 ? '+' : '';
-      h += '<td style="color:'+(sfd>0?'#ff6b6b':sfd<0?'#17E88F':'rgba(242,244,243,.5)')+'">'+(sfd !== null ? sfdSign+sfd.toLocaleString()+' SF' : '—')+'</td>';
+      var sfd = p.sfDelta;
+      var sfdWord = sfd > 0 ? 'shortfall' : sfd < 0 ? 'surplus' : 'at capacity';
+      var sfdCol  = sfd > 0 ? '#ff6b6b' : sfd < 0 ? '#17E88F' : 'rgba(242,244,243,.5)';
+      h += '<td style="color:'+sfdCol+';font-weight:600">'+(sfd !== null ? Math.abs(sfd).toLocaleString()+' SF '+sfdWord : '—')+'</td>';
     }
 
     h += '</tr>';
@@ -3064,17 +3070,19 @@ function buildFlexGrowthTable(d) {
     + '<th style="color:var(--sc-high)">High HC</th>'
     + '<th style="color:var(--sc-high)">High Peak</th>'
     + (hasSF ? '<th style="color:var(--sc-high)">High SF Needed</th>' : '')
-    + (supply ? '<th>Seats</th><th>Seat Gap</th>' : '')
-    + (hasSF  ? '<th>Curr SF</th><th>SF Gap (Base)</th>' : '')
+    + (supply ? '<th>Seats</th><th>Seat Surplus / Shortfall</th>' : '')
+    + (hasSF  ? '<th>Curr SF</th><th>SF Surplus / Shortfall</th>' : '')
     + '</tr></thead><tbody>';
 
   rows.forEach(function(r) {
-    var seatGap    = supply ? r.base.peak - supply : null;
-    var seatGapStr = seatGap !== null ? (seatGap > 0 ? '+' + seatGap : String(seatGap)) : '';
-    var seatGapCol = seatGap !== null ? (seatGap > 0 ? '#ff6b6b' : '#17E88F') : '';
-    var sfGap      = hasSF && r.base.sf !== null ? r.base.sf - totalSF : null;
-    var sfGapStr   = sfGap !== null ? (sfGap > 0 ? '+' + sfGap.toLocaleString() : sfGap.toLocaleString()) : '';
-    var sfGapCol   = sfGap !== null ? (sfGap > 0 ? '#ff6b6b' : '#17E88F') : '';
+    var seatGap     = supply ? r.base.peak - supply : null;
+    var seatGapWord = seatGap !== null ? (seatGap > 0 ? 'shortfall' : seatGap < 0 ? 'surplus' : 'at capacity') : '';
+    var seatGapCol  = seatGap !== null ? (seatGap > 0 ? '#ff6b6b' : seatGap < 0 ? '#17E88F' : 'rgba(242,244,243,.5)') : '';
+    var seatGapStr  = seatGap !== null ? Math.abs(seatGap).toLocaleString() + ' ' + seatGapWord : '';
+    var sfGap     = hasSF && r.base.sf !== null ? r.base.sf - totalSF : null;
+    var sfGapWord = sfGap !== null ? (sfGap > 0 ? 'shortfall' : sfGap < 0 ? 'surplus' : 'at capacity') : '';
+    var sfGapCol  = sfGap !== null ? (sfGap > 0 ? '#ff6b6b' : sfGap < 0 ? '#17E88F' : 'rgba(242,244,243,.5)') : '';
+    var sfGapStr  = sfGap !== null ? Math.abs(sfGap).toLocaleString() + ' SF ' + sfGapWord : '';
 
     h += '<tr' + (r.isCurr ? ' class="curr-row"' : '') + '>'
       + '<td style="font-weight:600">' + r.year + (r.isCurr ? ' <span style="font-size:.65rem;color:var(--accent)">current</span>' : '') + '</td>'
@@ -3088,7 +3096,7 @@ function buildFlexGrowthTable(d) {
       + '<td style="color:var(--sc-high);font-weight:600">' + r.high.peak.toLocaleString() + '</td>'
       + (hasSF ? '<td style="color:var(--sc-high)">' + (r.high.sf !== null ? r.high.sf.toLocaleString() + ' SF' : '—') + '</td>' : '')
       + (supply ? '<td>' + supply.toLocaleString() + '</td><td style="color:' + seatGapCol + ';font-weight:600">' + seatGapStr + '</td>' : '')
-      + (hasSF  ? '<td>' + totalSF.toLocaleString() + '</td><td style="color:' + sfGapCol + ';font-weight:600">' + sfGapStr + ' SF</td>' : '')
+      + (hasSF  ? '<td>' + totalSF.toLocaleString() + '</td><td style="color:' + sfGapCol + ';font-weight:600">' + sfGapStr + '</td>' : '')
       + '</tr>';
   });
 
