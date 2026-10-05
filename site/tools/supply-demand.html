@@ -3399,7 +3399,7 @@ function downloadClientPackage() {
       // Lock all inputs — client view is read-only
       '  document.querySelectorAll("input, select").forEach(function(el){ el.disabled=true; });\n' +
       '  document.querySelectorAll(".att-preset,.policy-btn,.btn-sample").forEach(function(el){ el.disabled=true; el.style.pointerEvents="none"; el.style.opacity=".45"; });\n' +
-      '  var dlBtn=document.getElementById("btn-download"); if(dlBtn) dlBtn.style.display="none";\n' +
+      '  var navActions=document.querySelector(".nav-actions"); if(navActions) navActions.style.display="none";\n' +
       '  var backBtn=document.querySelector(".nav-back"); if(backBtn) backBtn.style.display="none";\n' +
       '})();\n<\/script>';
 
