@@ -582,6 +582,22 @@ select.text-input option{background:#001A14;color:#F2F4F3;}
             </div>
             <div class="input-hint">Default rates account for day-of-week clustering. Adjust based on your badge/sensor data.</div>
           </div>
+          <div class="input-group" style="margin-top:.65rem">
+            <label class="input-label">Current Seat Supply <span style="font-weight:400;opacity:.4;text-transform:none;letter-spacing:0">— optional</span></label>
+            <div class="input-with-unit">
+              <input type="number" class="num-input-sm" id="flexSeats" min="0" placeholder="—" oninput="state.flexSeats=parseInt(this.value)||0;recompute()"/>
+              <span class="unit">seats</span>
+            </div>
+            <div class="input-hint">Enter your current seat count to see utilization and surplus/shortfall alongside each policy scenario and the growth outlook.</div>
+          </div>
+          <div class="input-group" style="margin-top:.65rem">
+            <label class="input-label">Current RSF <span style="font-weight:400;opacity:.4;text-transform:none;letter-spacing:0">— optional</span></label>
+            <div class="input-with-unit">
+              <input type="number" class="num-input-sm" id="flexRSF" min="0" placeholder="—" oninput="state.totalRSF=parseInt(this.value)||0;recompute()"/>
+              <span class="unit">SF</span>
+            </div>
+            <div class="input-hint">Enter the lease square footage to unlock SF/seat, SF needed per policy, and SF surplus/shortfall in the growth outlook.</div>
+          </div>
         </div>
       </div>
 
@@ -791,6 +807,7 @@ var state = {
   flexRates: { 2: 40, 3: 60, 4: 78, 5: 95 },
   flexSeatingModel: 'shared',
   flexSharingRatio: 1.3,
+  flexSeats: 0,
 };
 
 var MODE_META = {
@@ -2563,6 +2580,7 @@ function computeFlex() {
   var hc         = state.currentHC || 0;
   var totalSeats = 0;
   buildings.forEach(function(b) { totalSeats += resolveSeats(b); });
+  if (!totalSeats && state.flexSeats) totalSeats = state.flexSeats;
   var totalSF  = state.totalRSF || 0;
   var density  = state.targetDensity || 0;
   var model    = state.flexSeatingModel || 'shared';
@@ -2696,6 +2714,12 @@ function buildFlexDashboard(d) {
 
   // ── Comparison Table ──────────────────────────────────────────────────────
   h += buildFlexTable(d, hasSeats, hasSF, vibrancy, oversub);
+
+  // ── Growth Outlook ────────────────────────────────────────────────────────
+  h += buildFlexGrowthTable(d);
+
+  // ── Assumptions & Limitations ─────────────────────────────────────────────
+  h += buildFlexAssumptions(d);
 
   return h;
 }
@@ -2883,6 +2907,140 @@ function buildFlexTable(d, hasSeats, hasSF, vibrancy, oversub) {
   h += '</tbody></table></div>'
     + '<div style="font-size:.65rem;color:rgba(242,244,243,.28);margin-top:.5rem">'+footNote+'</div>'
     + '</div>';
+  return h;
+}
+
+// ─── FLEX GROWTH OUTLOOK ─────────────────────────────────────────────────────
+function buildFlexGrowthTable(d) {
+  var hc       = state.currentHC || 0;
+  if (!hc) return '';
+  var baseYear = state.baseYear || new Date().getFullYear();
+  var horizon  = Math.max(1, state.planningHorizon || 5);
+  var curDays  = state.currentPolicy || 2;
+  var attRate  = (state.flexRates[curDays] || 40) / 100;
+  var curPolicy= d.policies.find(function(p){ return p.isCurrent; }) || d.policies[0];
+  var pLabel   = curPolicy ? curPolicy.label : curDays + '-Day';
+  var attPct   = Math.round(attRate * 100);
+
+  var rBase = (state.scenarios.base.rate || 0) / 100;
+  var rMid  = (state.scenarios.mid.rate  || 0) / 100;
+  var rHigh = (state.scenarios.high.rate || 0) / 100;
+
+  var supply  = d.totalSeats || 0;
+  var totalSF = state.totalRSF || 0;
+  var density = state.targetDensity || 0;
+  var hasSF   = totalSF > 0 && density > 0;
+
+  var rows = [];
+  for (var y = 0; y <= horizon; y++) {
+    var hcBase = Math.round(hc * Math.pow(1 + rBase, y));
+    var hcMid  = Math.round(hc * Math.pow(1 + rMid,  y));
+    var hcHigh = Math.round(hc * Math.pow(1 + rHigh, y));
+    var pkBase = Math.round(hcBase * attRate);
+    var pkMid  = Math.round(hcMid  * attRate);
+    var pkHigh = Math.round(hcHigh * attRate);
+    rows.push({
+      year:   baseYear + y,
+      isCurr: y === 0,
+      base:   { hc: hcBase, peak: pkBase, sf: hasSF ? Math.round(pkBase * density) : null },
+      mid:    { hc: hcMid,  peak: pkMid,  sf: hasSF ? Math.round(pkMid  * density) : null },
+      high:   { hc: hcHigh, peak: pkHigh, sf: hasSF ? Math.round(pkHigh * density) : null },
+    });
+  }
+
+  var h = '<div class="chart-card"><div class="chart-card-head">'
+    + '<div class="chart-title">Growth Outlook &mdash; ' + pLabel + ' Policy (' + attPct + '% peak rate)</div>'
+    + '<div class="chart-legend">'
+    + '<span style="color:var(--sc-base)">&#9679; Base (' + Math.round(rBase*100) + '%/yr)</span>'
+    + '<span style="color:var(--sc-mid)">&#9679; Mid (' + Math.round(rMid*100) + '%/yr)</span>'
+    + '<span style="color:var(--sc-high)">&#9679; High (' + Math.round(rHigh*100) + '%/yr)</span>'
+    + (supply ? '<span style="color:rgba(242,244,243,.4)">&ndash;&ndash; Supply (' + supply.toLocaleString() + ' seats)</span>' : '')
+    + (hasSF  ? '<span style="color:rgba(242,244,243,.4)">&ndash;&ndash; Current ' + totalSF.toLocaleString() + ' SF</span>' : '')
+    + '</div></div>';
+
+  h += '<div class="tbl-wrap"><table class="data-tbl"><thead><tr>'
+    + '<th>Year</th>'
+    + '<th style="color:var(--sc-base)">Base HC</th>'
+    + '<th style="color:var(--sc-base)">Base Peak</th>'
+    + (hasSF ? '<th style="color:var(--sc-base)">Base SF Needed</th>' : '')
+    + '<th style="color:var(--sc-mid)">Mid HC</th>'
+    + '<th style="color:var(--sc-mid)">Mid Peak</th>'
+    + (hasSF ? '<th style="color:var(--sc-mid)">Mid SF Needed</th>' : '')
+    + '<th style="color:var(--sc-high)">High HC</th>'
+    + '<th style="color:var(--sc-high)">High Peak</th>'
+    + (hasSF ? '<th style="color:var(--sc-high)">High SF Needed</th>' : '')
+    + (supply ? '<th>Seats</th><th>Seat Gap</th>' : '')
+    + (hasSF  ? '<th>Curr SF</th><th>SF Gap (Base)</th>' : '')
+    + '</tr></thead><tbody>';
+
+  rows.forEach(function(r) {
+    var seatGap    = supply ? r.base.peak - supply : null;
+    var seatGapStr = seatGap !== null ? (seatGap > 0 ? '+' + seatGap : String(seatGap)) : '';
+    var seatGapCol = seatGap !== null ? (seatGap > 0 ? '#ff6b6b' : '#17E88F') : '';
+    var sfGap      = hasSF && r.base.sf !== null ? r.base.sf - totalSF : null;
+    var sfGapStr   = sfGap !== null ? (sfGap > 0 ? '+' + sfGap.toLocaleString() : sfGap.toLocaleString()) : '';
+    var sfGapCol   = sfGap !== null ? (sfGap > 0 ? '#ff6b6b' : '#17E88F') : '';
+
+    h += '<tr' + (r.isCurr ? ' class="curr-row"' : '') + '>'
+      + '<td style="font-weight:600">' + r.year + (r.isCurr ? ' <span style="font-size:.65rem;color:var(--accent)">current</span>' : '') + '</td>'
+      + '<td style="color:var(--sc-base)">' + r.base.hc.toLocaleString() + '</td>'
+      + '<td style="color:var(--sc-base);font-weight:600">' + r.base.peak.toLocaleString() + '</td>'
+      + (hasSF ? '<td style="color:var(--sc-base)">' + (r.base.sf !== null ? r.base.sf.toLocaleString() + ' SF' : '—') + '</td>' : '')
+      + '<td style="color:var(--sc-mid)">' + r.mid.hc.toLocaleString() + '</td>'
+      + '<td style="color:var(--sc-mid);font-weight:600">' + r.mid.peak.toLocaleString() + '</td>'
+      + (hasSF ? '<td style="color:var(--sc-mid)">' + (r.mid.sf !== null ? r.mid.sf.toLocaleString() + ' SF' : '—') + '</td>' : '')
+      + '<td style="color:var(--sc-high)">' + r.high.hc.toLocaleString() + '</td>'
+      + '<td style="color:var(--sc-high);font-weight:600">' + r.high.peak.toLocaleString() + '</td>'
+      + (hasSF ? '<td style="color:var(--sc-high)">' + (r.high.sf !== null ? r.high.sf.toLocaleString() + ' SF' : '—') + '</td>' : '')
+      + (supply ? '<td>' + supply.toLocaleString() + '</td><td style="color:' + seatGapCol + ';font-weight:600">' + seatGapStr + '</td>' : '')
+      + (hasSF  ? '<td>' + totalSF.toLocaleString() + '</td><td style="color:' + sfGapCol + ';font-weight:600">' + sfGapStr + ' SF</td>' : '')
+      + '</tr>';
+  });
+
+  h += '</tbody></table></div>'
+    + '<div style="font-size:.65rem;color:rgba(242,244,243,.28);margin-top:.5rem">'
+    + 'Peak seats = projected HC &times; ' + attPct + '% attendance rate under the ' + pLabel + ' mandate.'
+    + (hasSF ? ' SF Needed = peak seats &times; ' + density + ' SF/seat (' + (state.sector || 'industry') + ' benchmark). SF Gap = SF Needed &minus; current ' + totalSF.toLocaleString() + ' SF.' : '')
+    + (!hasSF && totalSF > 0 ? ' Select an industry sector to enable SF projections.' : '')
+    + (!hasSF && !totalSF ? ' Enter RSF above to unlock SF projections.' : '')
+    + '</div></div>';
+
+  return h;
+}
+
+// ─── FLEX ASSUMPTIONS ────────────────────────────────────────────────────────
+function buildFlexAssumptions(d) {
+  var hasSF  = d.totalSF > 0 && d.density > 0;
+  var items = [
+    { icon: '📐', text: 'Space configuration is held constant. This model does not account for densification, reconfiguration, or repurposing of existing space — all of which could increase effective seat capacity without adding SF.' },
+    { icon: '📊', text: 'Peak attendance rates (' + Object.keys(state.flexRates).map(function(k){ return k+'-day: '+state.flexRates[k]+'%'; }).join(', ') + ') are planning estimates. Actual attendance depends on role mix, culture, manager enforcement, and day-of-week clustering.' },
+    { icon: '📈', text: 'Growth scenarios assume steady compound annual growth. Real-world hiring is often lumpy — influenced by funding rounds, reorganizations, or hiring freezes — and may deviate significantly from these trajectories.' },
+    { icon: '🏢', text: 'Seat count reflects workstations only as entered. Dedicated amenity space (training rooms, huddle rooms, phone booths, reception) consumes additional SF and may reduce effective workstation availability.' },
+    hasSF
+      ? { icon: '📏', text: 'SF projections use the ' + (state.sector || 'selected') + ' industry benchmark of ' + d.density + ' SF/seat — not a measured or audited figure. Actual SF efficiency depends on floor configuration, column grid, core placement, and fit-out standards.' }
+      : null,
+    { icon: '👥', text: 'This model reflects employees assigned to or expected to use this location. Remote employees, visitors, contractors, and future hirers who may shift to in-office status are not included in demand unless reflected in the growth rate.' },
+  ].filter(Boolean);
+
+  var h = '<div class="chart-card" style="border-color:rgba(255,255,255,.08)">'
+    + '<div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.85rem">'
+    + '<div style="font-size:1rem">⚠️</div>'
+    + '<div style="font-size:.78rem;font-weight:700;color:rgba(242,244,243,.5);letter-spacing:.04em;text-transform:uppercase">Key Assumptions &amp; Limitations</div>'
+    + '</div>'
+    + '<div style="display:flex;flex-direction:column;gap:.65rem">';
+
+  items.forEach(function(item) {
+    h += '<div style="display:flex;gap:.65rem;align-items:flex-start">'
+      + '<span style="font-size:.85rem;line-height:1.4;flex-shrink:0">' + item.icon + '</span>'
+      + '<span style="font-size:.72rem;color:rgba(242,244,243,.45);line-height:1.65">' + item.text + '</span>'
+      + '</div>';
+  });
+
+  h += '</div>'
+    + '<div style="margin-top:.85rem;padding-top:.75rem;border-top:1px solid rgba(255,255,255,.06);font-size:.65rem;color:rgba(242,244,243,.25)">'
+    + 'This analysis is for planning purposes only. It does not constitute a lease recommendation, space certification, or legal opinion. Validate assumptions with occupancy data, lease documents, and stakeholder interviews before making real estate decisions.'
+    + '</div></div>';
+
   return h;
 }
 
