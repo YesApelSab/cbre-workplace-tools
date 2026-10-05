@@ -3120,7 +3120,14 @@ function buildFlexAssumptions(d) {
     { icon: '📈', text: 'Growth scenarios assume steady compound annual growth. Real-world hiring is often lumpy — influenced by funding rounds, reorganizations, or hiring freezes — and may deviate significantly from these trajectories.' },
     { icon: '🏢', text: 'Seat count reflects workstations only as entered. Dedicated amenity space (training rooms, huddle rooms, phone booths, reception) consumes additional SF and may reduce effective workstation availability.' },
     hasSF
-      ? { icon: '📏', text: 'SF projections use the ' + (state.sector || 'selected') + ' industry benchmark of ' + d.density + ' SF/seat — not a measured or audited figure. Actual SF efficiency depends on floor configuration, column grid, core placement, and fit-out standards.' }
+      ? (function(){
+          var benchmarkDensity = state.sector && SECTOR_BM[state.sector] ? SECTOR_BM[state.sector].ss : null;
+          var isOverride = benchmarkDensity && d.density !== benchmarkDensity;
+          if (isOverride) {
+            return { icon: '📏', text: 'SF projections are based on the client\'s current space allocation (' + d.density + ' SF/seat, derived from their actual lease footprint) rather than the ' + state.sector + ' industry benchmark of ' + benchmarkDensity + ' SF/seat. This reflects how the space is currently configured, not a planned or audited standard.' };
+          }
+          return { icon: '📏', text: 'SF projections use the ' + (state.sector || 'selected') + ' industry benchmark of ' + d.density + ' SF/seat — not a measured or audited figure. Actual SF efficiency depends on floor configuration, column grid, core placement, and fit-out standards.' };
+        })()
       : null,
     { icon: '👥', text: 'This model reflects employees assigned to or expected to use this location. Remote employees, visitors, contractors, and future hirers who may shift to in-office status are not included in demand unless reflected in the growth rate.' },
   ].filter(Boolean);
