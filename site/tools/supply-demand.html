@@ -3396,6 +3396,10 @@ function downloadClientPackage() {
       '  if(typeof syncAttPreset==="function") syncAttPreset();\n' +
       '  if(typeof syncLeasePreset==="function") syncLeasePreset();\n' +
       '  if(typeof recompute==="function") recompute();\n' +
+      // Lock all inputs — client view is read-only
+      '  document.querySelectorAll("input, select").forEach(function(el){ el.disabled=true; });\n' +
+      '  document.querySelectorAll(".att-preset,.policy-btn,.btn-sample").forEach(function(el){ el.disabled=true; el.style.pointerEvents="none"; el.style.opacity=".45"; });\n' +
+      '  var dlBtn=document.getElementById("btn-download"); if(dlBtn) dlBtn.style.display="none";\n' +
       '})();\n<\/script>';
 
     var html = __PAGE_SOURCE__;
