@@ -2725,6 +2725,37 @@ function buildFlexDashboard(d) {
 }
 
 function buildFlexImpactBanner(d, cur, hasSeats, hasSF) {
+  // When supply data is available, show current-state snapshot instead of
+  // a step-up comparison (which implies a policy move nobody may have asked for).
+  if (hasSeats && cur.util !== null) {
+    var seatSurplus = d.totalSeats - cur.peak;
+    var surplusSign = seatSurplus >= 0 ? '' : '+';
+    var surplusCol  = seatSurplus >= 0 ? '#17E88F' : '#ff6b6b';
+    var surplusWord = seatSurplus >= 0 ? 'surplus' : 'shortfall';
+    var sfSurplusLine = '';
+    if (hasSF && cur.sfNeeded !== null) {
+      var sfSurplus = d.totalSF - cur.sfNeeded;
+      var sfSurplusCol = sfSurplus >= 0 ? '#17E88F' : '#ff6b6b';
+      var sfSurplusSign = sfSurplus >= 0 ? '' : '+';
+      sfSurplusLine = ' That leaves a <strong style="color:'+sfSurplusCol+'">'+(sfSurplus >= 0 ? sfSurplus.toLocaleString() : sfSurplusSign+Math.abs(sfSurplus).toLocaleString())+' SF '+surplusWord+'</strong> against the current lease.';
+    }
+    var utilCol = cur.util > (state.oversubscribedThreshold||80) ? '#ff6b6b' : cur.util < (state.vibrancyThreshold||67) ? '#538184' : '#17E88F';
+    var body = 'Under the current <strong>'+cur.label+' mandate ('+cur.rate+'% peak attendance)</strong>, '
+      + state.currentHC.toLocaleString()+' employees generate peak demand of <strong>'+cur.peak.toLocaleString()+' seats</strong> — '
+      + 'leaving a <strong style="color:'+surplusCol+'">'+seatSurplus.toLocaleString()+'-seat '+surplusWord+'</strong> against '+d.totalSeats.toLocaleString()+' available.'
+      + sfSurplusLine
+      + ' Space utilization at peak: <strong style="color:'+utilCol+'">'+cur.util+'%</strong>.'
+      + ' Use the policy scenarios below to model what happens if the mandate changes.';
+
+    return '<div style="background:rgba(23,232,143,.05);border:1px solid rgba(23,232,143,.2);border-radius:12px;padding:1rem 1.25rem;margin-bottom:1rem;display:flex;align-items:flex-start;gap:.85rem">'
+      + '<div style="font-size:1.75rem;line-height:1;margin-top:.1rem">📍</div>'
+      + '<div style="flex:1">'
+      + '<div style="font-size:.82rem;font-weight:700;color:var(--text);margin-bottom:.35rem">Current State: ' + cur.label + ' Policy</div>'
+      + '<div style="font-size:.78rem;color:rgba(242,244,243,.65);line-height:1.7">'+body+'</div>'
+      + '</div></div>';
+  }
+
+  // Fallback: no supply data — show step-up comparison as before
   var proposed = d.policies.find(function(p){ return p.days === cur.days + 1; })
               || d.policies.find(function(p){ return p.days === cur.days - 1; })
               || d.policies.filter(function(p){ return !p.isCurrent; })[0];
@@ -2733,7 +2764,6 @@ function buildFlexImpactBanner(d, cur, hasSeats, hasSF) {
   var body = '';
 
   if (d.model === 'assigned') {
-    // In assigned mode, desk count never changes — policy only shifts occupancy
     var occChange = proposed.util !== null && cur.util !== null ? proposed.util - cur.util : null;
     var occDir    = occChange >= 0 ? 'raises' : 'lowers';
     var occCol    = occChange >= 0 ? '#ff6b6b' : '#17E88F';
@@ -2745,7 +2775,6 @@ function buildFlexImpactBanner(d, cur, hasSeats, hasSF) {
       + '<strong style="color:'+occCol+'">'+proposed.util+'%</strong>. '
       + 'Fewer people in means more empty assigned desks — wasted space with no seat savings.';
   } else if (d.model === 'ratio') {
-    // Ratio model: desk count also fixed, but show how peak load vs. provision changes
     var loadChange = proposed.util !== null && cur.util !== null ? proposed.util - cur.util : null;
     var loadDir    = loadChange >= 0 ? 'pushes utilization up' : 'eases utilization down';
     col = loadChange >= 0 ? '#ff6b6b' : '#17E88F';
@@ -2754,7 +2783,6 @@ function buildFlexImpactBanner(d, cur, hasSeats, hasSF) {
       + loadDir+' from <strong>'+cur.util+'%</strong> to <strong style="color:'+col+'">'+proposed.util+'%</strong>. '
       + 'A tighter mandate can push utilization past the over-subscribed threshold — watch the red zone.';
   } else {
-    // Shared: seat demand shifts with attendance
     var seatChange = proposed.peak - cur.peak;
     var seatSign   = seatChange >= 0 ? '+' : '';
     var direction  = seatChange >= 0 ? 'increase' : 'decrease';
