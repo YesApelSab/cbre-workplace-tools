@@ -417,6 +417,7 @@ select.text-input option{background:#001A14;color:#F2F4F3;}
     <button class="btn-export" id="btn-pdf" style="display:none" onclick="exportPDF()">↓ PDF</button>
     <button class="btn-export" id="btn-excel" style="display:none" onclick="exportExcel()">↓ Excel</button>
     <button class="btn-export" id="btn-png" style="display:none" onclick="exportPNG()">↓ PNG</button>
+    <button class="btn-export" id="btn-client-pkg" style="display:none;color:#17E88F;border-color:rgba(23,232,143,.35)" onclick="downloadClientPackage()">↓ Client Package</button>
     <button class="mode-badge" id="mode-badge" onclick="showPicker()" style="display:none"></button>
     <a class="nav-back" href="/cbre-workplace-tools/">← Back to tools</a>
   </div>
@@ -742,6 +743,15 @@ select.text-input option{background:#001A14;color:#F2F4F3;}
 </div><!-- end page -->
 
 <script>
+// Capture pristine HTML source after DOM is fully parsed (used by Client Package export).
+var __PAGE_SOURCE__ = '';
+var _captureSDSource = function(){ __PAGE_SOURCE__ = '<!DOCTYPE html>\n' + document.documentElement.outerHTML; };
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _captureSDSource);
+} else {
+  _captureSDSource();
+}
+
 // ─── STATE ──────────────────────────────────────────────────────────────────
 // 2026 GWOIR sector benchmarks — SF/seat (ss) matches space processor tool
 var SECTOR_BM = {
@@ -1313,8 +1323,9 @@ function recompute() {
   var bXls = document.getElementById('btn-excel');
   var bPdf = document.getElementById('btn-pdf');
   var dash = document.getElementById('dashboard');
+  var bPkg = document.getElementById('btn-client-pkg');
   function showExports(on) {
-    [bPng,bXls,bPdf].forEach(function(b){ if(b) b.style.display = on ? '' : 'none'; });
+    [bPng,bXls,bPdf,bPkg].forEach(function(b){ if(b) b.style.display = on ? '' : 'none'; });
   }
 
   // ── Relocate path ──
@@ -3045,6 +3056,86 @@ function exportExcel() {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(invRows), 'Building Inventory');
 
   XLSX.writeFile(wb, cn.replace(/[^a-zA-Z0-9 ]/g,'_')+'_Supply_Demand.xlsx');
+}
+
+// ─── CLIENT PACKAGE EXPORT ───────────────────────────────────────────────────
+function downloadClientPackage() {
+  if (!state.mode || !state.currentHC) { alert('Build your analysis first, then export.'); return; }
+
+  var btn = document.getElementById('btn-client-pkg');
+  var orig = btn ? btn.textContent : '';
+  if (btn) { btn.textContent = 'Generating…'; btn.disabled = true; }
+
+  try {
+    if (!__PAGE_SOURCE__) { alert('Page source not ready — try again in a moment.'); return; }
+
+    var payload = JSON.stringify({
+      state: state,
+      buildings: buildings,
+      expansionOptions: expansionOptions,
+      _bid: _bid, _fid: _fid, _eid: _eid, _xoid: _xoid,
+    }).replace(/<\/script>/gi, '<\\/script>');
+
+    var preloadScript = '<script>window.__SD_PRELOADED__=' + payload + ';<\/script>';
+
+    var slug = (state.clientName || 'client').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'client';
+    var clientLabel = state.clientName || 'Supply & Demand Analysis';
+
+    var autoloadScript = '<script>\n(function(){\n' +
+      '  var p=window.__SD_PRELOADED__; if(!p) return;\n' +
+      // Restore global state
+      '  Object.assign(state, p.state);\n' +
+      '  buildings=p.buildings; expansionOptions=p.expansionOptions;\n' +
+      '  _bid=p._bid; _fid=p._fid; _eid=p._eid; _xoid=p._xoid;\n' +
+      // Remove analyst-only controls
+      '  var cpBtn=document.getElementById("btn-client-pkg"); if(cpBtn) cpBtn.remove();\n' +
+      // Lock mode badge — no switching modes
+      '  var mb=document.getElementById("mode-badge"); if(mb) mb.removeAttribute("onclick");\n' +
+      // Select mode (shows the page, sets layout)
+      '  selectMode(p.state.mode);\n' +
+      // Restore all form inputs
+      '  var s=function(id,v){var e=document.getElementById(id);if(e)e.value=v;};\n' +
+      '  s("clientName",p.state.clientName||"");\n' +
+      '  s("sectorSelect",p.state.sector||"");\n' +
+      '  s("currentHC",p.state.currentHC);\n' +
+      '  s("baseYear",p.state.baseYear);\n' +
+      '  s("planningHorizon",p.state.planningHorizon);\n' +
+      '  s("leaseTerm",p.state.leaseTerm);\n' +
+      '  s("attendanceRate",p.state.attendanceRate);\n' +
+      '  s("avgAttendanceRate",p.state.avgAttendanceRate||"");\n' +
+      '  s("rateBase",p.state.scenarios.base.rate);\n' +
+      '  s("rateMid",p.state.scenarios.mid.rate);\n' +
+      '  s("rateHigh",p.state.scenarios.high.rate);\n' +
+      '  s("vibrancyThreshold",p.state.vibrancyThreshold);\n' +
+      '  s("oversubscribedThreshold",p.state.oversubscribedThreshold);\n' +
+      '  s("targetDensity",p.state.targetDensity||"");\n' +
+      '  s("flexRate2",p.state.flexRates[2]); s("flexRate3",p.state.flexRates[3]);\n' +
+      '  s("flexRate4",p.state.flexRates[4]); s("flexRate5",p.state.flexRates[5]);\n' +
+      // Restore seating model buttons
+      '  if(typeof setFlexSeatingModel==="function") setFlexSeatingModel(p.state.flexSeatingModel||"shared");\n' +
+      // Render and compute
+      '  if(typeof renderInputs==="function") renderInputs();\n' +
+      '  if(typeof renderExpansionOptions==="function") renderExpansionOptions();\n' +
+      '  if(typeof updateHCPreview==="function") updateHCPreview();\n' +
+      '  if(typeof syncAttPreset==="function") syncAttPreset();\n' +
+      '  if(typeof syncLeasePreset==="function") syncLeasePreset();\n' +
+      '  if(typeof recompute==="function") recompute();\n' +
+      '})();\n<\/script>';
+
+    var html = __PAGE_SOURCE__;
+    html = html.replace(/<head>/i, function(){ return '<head>' + preloadScript; });
+    html = html + '\n' + autoloadScript;
+
+    var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    a.href = url; a.download = slug + '-supply-demand.html'; a.click();
+    URL.revokeObjectURL(url);
+  } catch(e) {
+    alert('Could not generate client package: ' + e.message);
+  } finally {
+    if (btn) { btn.textContent = orig; btn.disabled = false; }
+  }
 }
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
