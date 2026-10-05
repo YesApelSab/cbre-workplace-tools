@@ -3379,8 +3379,16 @@ function downloadClientPackage() {
       '  s("targetDensity",p.state.targetDensity||"");\n' +
       '  s("flexRate2",p.state.flexRates[2]); s("flexRate3",p.state.flexRates[3]);\n' +
       '  s("flexRate4",p.state.flexRates[4]); s("flexRate5",p.state.flexRates[5]);\n' +
+      '  s("flexSeats",p.state.flexSeats||"");\n' +
+      '  s("flexRSF",p.state.totalRSF||"");\n' +
+      '  s("proposedSF",p.state.proposedSF||"");\n' +
+      '  s("flexSharingRatio",p.state.flexSharingRatio||1.3);\n' +
       // Restore seating model buttons
       '  if(typeof setFlexSeatingModel==="function") setFlexSeatingModel(p.state.flexSeatingModel||"shared");\n' +
+      // Restore current policy button state
+      '  if(typeof setFlexCurrentPolicy==="function") setFlexCurrentPolicy(p.state.currentPolicy||3);\n' +
+      // Restore seat assignment policy toggle
+      '  if(typeof setAssignmentPolicy==="function") setAssignmentPolicy(p.state.assignedSeating||false);\n' +
       // Render and compute
       '  if(typeof renderInputs==="function") renderInputs();\n' +
       '  if(typeof renderExpansionOptions==="function") renderExpansionOptions();\n' +
