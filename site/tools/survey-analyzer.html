@@ -1786,11 +1786,15 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
       else colDtype[c] = 'other';
     });
 
-    // Build pool of columns with question text
-    const pool = codes.map((code, i) => ({
-      code: code ? code.trim() : '',
-      qt: (qTexts[i] || '').toLowerCase().trim(),
-    })).filter(c => c.code && colIdx[c.code] !== undefined);
+    // Build pool of columns with question text, including row-2 sub-question labels
+    // for matrix questions where qTexts[i] is the shared parent question text
+    const pool = codes.map((code, i) => {
+      const c = code ? code.trim() : '';
+      return {
+        code: c,
+        qt: ((qTexts[i] || '') + ' ' + (colMetaMap[c] || '')).toLowerCase().trim(),
+      };
+    }).filter(c => c.code && colIdx[c.code] !== undefined);
 
     // Mark codes already matched by exact section array codes
     const claimed = new Set();
@@ -1825,11 +1829,13 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
         let bestScore = 0, bestEntry = null;
         pool.forEach(entry => {
           if (claimed.has(entry.code)) return;
-          // Must match the section's expected data type (supply vs. Likert vs. checkbox).
-          // This is the primary guard that prevents stem/intro columns from being matched:
-          // a matrix intro column contains no supply or Likert responses.
+          // Supply sections only match supply-typed columns; non-supply sections never match
+          // supply-typed columns. Frequency and custom ordinal scales classify as 'other'
+          // and are allowed to match any non-supply section (e.g. HOST with daily/weekly).
           const dtype = colDtype[entry.code] || 'other';
-          if (expectedDtype !== 'checkbox' && dtype !== expectedDtype) return;
+          if (expectedDtype === 'supply' && dtype !== 'supply') return;
+          if (expectedDtype !== 'supply' && dtype === 'supply') return;
+          if (expectedDtype === 'checkbox' && dtype === 'supply') return;
           const score = keywords.reduce((s, kw) => s + (entry.qt.includes(kw) ? 1 : 0), 0);
           if (score > bestScore) { bestScore = score; bestEntry = entry; }
         });
