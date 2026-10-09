@@ -1680,13 +1680,14 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
   const allClaimedForWriteIn = new Set(Object.values(C).flatMap(v =>
     typeof v === 'string' ? [v] : Array.isArray(v) ? v.filter(x => typeof x === 'string') : []
   ));
+  // Track codes already pushed to prevent duplicate entries when a CSV has two columns
+  // with the same header (Key Survey "Other" checkbox + free-text companion pattern).
+  const seenWriteInCodes = new Set();
   codes.forEach((code, i) => {
     if (!code || !code.trim()) return;
     const c3 = code.trim();
     if (allClaimedForWriteIn.has(c3)) return;
     const qt3 = (qTexts[i] || '').toLowerCase();
-    // Also detect by column code suffix: QUESTION.OTHER, QUESTION.SPEC, QUESTION.OSPEC, QUESTION.WRITEOTHER etc.
-    const codeLower = c3.toLowerCase();
     const metaLabel3 = (colMetaMap[c3] || '').toLowerCase();
     const looksLikeWriteIn =
       (qt3.includes('other') && (qt3.includes('specify') || qt3.includes('please') || qt3.includes('write') || qt3.includes('describe') || qt3.includes('explain'))) ||
@@ -1704,6 +1705,22 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     const uq = new Set(responses);
     const al = [...uq].reduce((s, v) => s + v.length, 0) / uq.size;
     if (al < 3 || al > 500) return;
+    // Duplicate header: merge into existing entry, keeping whichever column has longer
+    // average responses (free-text is naturally longer than a checkbox selection value).
+    if (seenWriteInCodes.has(c3)) {
+      const existing = writeInCols.find(w => w.code === c3);
+      if (existing) {
+        const existingUq = new Set(existing.responses);
+        const existingAl = [...existingUq].reduce((s, v) => s + v.length, 0) / existingUq.size;
+        if (al > existingAl) {
+          existing.responses = responses;
+        } else {
+          existing.responses = [...new Set([...existing.responses, ...responses])];
+        }
+      }
+      return;
+    }
+    seenWriteInCodes.add(c3);
     writeInCols.push({ code: c3, label: (qTexts[i] || '').trim() || c3, responses });
   });
 
