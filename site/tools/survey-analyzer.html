@@ -257,7 +257,7 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
 
 /* STACKED BARS */
 .stacked-chart { display: flex; flex-direction: column; gap: 0.6rem; }
-.bar-row { display: flex; align-items: center; gap: 0.7rem; overflow: hidden; }
+.bar-row { display: flex; align-items: center; gap: 0.7rem; overflow: hidden; min-height: 2.25rem; }
 .bar-label { font-size: 0.76rem; color: var(--text); min-width: 215px; max-width: 240px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.4; flex-shrink: 0; }
 .bar-track { flex: 1; height: 26px; display: flex; border-radius: 4px; overflow: hidden; min-width: 0; }
 .amm-chart .bar-track { flex: 1; }
@@ -1450,6 +1450,30 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
   if (!assignedWsFound) C.Q11 = '';
   if (!wsTypeFound) C.Q12 = '';
 
+  // Auto-detect lunch and technology-needs columns by question text so write-in
+  // companions (e.g. Q23.A6) get linked inline instead of floating standalone.
+  let lunFreqFound = false, lunLocalFound = false, techNeedFound = false;
+  codes.forEach((code, i) => {
+    if (!code || !code.trim()) return;
+    const qt = (qTexts[i] || '').toLowerCase();
+    if (!lunFreqFound && qt.includes('lunch') &&
+        (qt.includes('how often') || qt.includes('how frequently') || qt.includes('frequency') || qt.includes('often do you eat'))) {
+      C.LUNFREQ = code.trim(); lunFreqFound = true;
+    }
+    if (!lunLocalFound && (
+      (qt.includes('lunch') && (qt.includes('where') || qt.includes('location') || qt.includes('typically eat') || qt.includes('eat your lunch'))) ||
+      (qt.includes('where do you eat') && qt.includes('lunch')) ||
+      (qt.includes('where do you') && qt.includes('eat') && qt.includes('lunch'))
+    )) { C.LUNLOCAL = code.trim(); lunLocalFound = true; }
+    if (!techNeedFound && (
+      (qt.includes('technolog') && (qt.includes('need') || qt.includes('require') || qt.includes('support') || qt.includes('what technology'))) ||
+      qt.includes('technology needs') || qt.includes('tech needs')
+    )) { C.TECHNEED = code.trim(); techNeedFound = true; }
+  });
+  if (!lunFreqFound)  C.LUNFREQ  = '';
+  if (!lunLocalFound) C.LUNLOCAL = '';
+  if (!techNeedFound) C.TECHNEED = '';
+
   // Q26: specialty space verbatim — detect by question text
   let q26Found = !!C.Q26 && C.Q26 !== 'SPECREQ.A1';
   if (!q26Found) {
@@ -1525,7 +1549,14 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
       const qt = (qTexts[ci] || '').toLowerCase();
       const hasBen = ['benefit','advantage','encourage','motivat','reason'].some(k => qt.includes(k));
       const hasOff = ['office','in person','in-person','onsite','on-site','coming in','going in'].some(k => qt.includes(k));
-      if (hasBen && hasOff) obenDet.push(code.trim());
+      if (!hasBen || !hasOff) return;
+      // Skip write-in companion columns — their row-2 label looks like an "Other (specify)" field
+      const metaLbl = (colMetaMap[code.trim()] || '').toLowerCase();
+      const isWriteInMeta = metaLbl && metaLbl.includes('other') &&
+        (metaLbl.includes('specify') || metaLbl.includes('please') || metaLbl.includes('explain') || metaLbl.includes('write'));
+      const isWriteInCode = /[._]?([a-z]*other|otext|othertext|otherspec|spec(ify)?|ospec|write(in|other)?|open)$/i.test(code.trim());
+      if (isWriteInMeta || isWriteInCode) return;
+      obenDet.push(code.trim());
     });
     if (obenDet.length) {
       // Assign detected columns to semantic slots using keyword scoring.
@@ -1812,7 +1843,7 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     });
 
     const STOP = new Set(['with','that','this','from','into','your','each','area','more','less',
-                          'level','very','also','both','just','well','work','have','does']);
+                          'level','very','also','both','just','well','work','have','does','other']);
     SECTION_KEYS.forEach(key => {
       const arr = C[key];
       const labelArr = C[key + '_L'];
@@ -1828,7 +1859,20 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
           .map(w => w.replace(/[^a-z0-9]/g, ''))
           .filter(w => w.length >= 4 && !STOP.has(w));
         if (!keywords.length) return;
-        let bestScore = 0, bestEntry = null;
+        // Build keyword lists for other unresolved slots in this section for cross-contamination penalty.
+        const otherSlotKwsList = [];
+        arr.forEach((c, si) => {
+          if (si === slotIdx) return;
+          if (c && colIdx[c] !== undefined) return;
+          const lbl2 = (labelArr && labelArr[si]) || '';
+          if (!lbl2) return;
+          const kws2 = lbl2.toLowerCase()
+            .split(/[\s,&\/\-()\[\]]+/).map(w => w.replace(/[^a-z0-9]/g, ''))
+            .filter(w => w.length >= 4 && !STOP.has(w));
+          if (kws2.length) otherSlotKwsList.push(kws2);
+        });
+        const matchKw = (kw, qt) => qt.includes(kw) || (kw.length >= 5 && qt.includes(kw.slice(0, 5)));
+        let bestNetScore = -Infinity, bestEntry = null;
         pool.forEach(entry => {
           if (claimed.has(entry.code)) return;
           // Supply sections only match supply-typed columns; non-supply sections never match
@@ -1838,12 +1882,45 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
           if (expectedDtype === 'supply' && dtype !== 'supply') return;
           if (expectedDtype !== 'supply' && dtype === 'supply') return;
           if (expectedDtype === 'checkbox' && dtype === 'supply') return;
-          const score = keywords.reduce((s, kw) => s + (entry.qt.includes(kw) ? 1 : 0), 0);
-          if (score > bestScore) { bestScore = score; bestEntry = entry; }
+          const score = keywords.reduce((s, kw) => s + (matchKw(kw, entry.qt) ? 1 : 0), 0);
+          if (score < 1) return;
+          const competingScore = otherSlotKwsList.reduce((maxS, kws2) => {
+            const s2 = kws2.reduce((ks, kw) => ks + (matchKw(kw, entry.qt) ? 1 : 0), 0);
+            return Math.max(maxS, s2);
+          }, 0);
+          const netScore = score - 0.5 * competingScore;
+          if (netScore > bestNetScore) { bestNetScore = netScore; bestEntry = entry; }
         });
-        if (bestScore >= 1 && bestEntry) {
+        if (bestNetScore > -Infinity && bestEntry) {
           arr[slotIdx] = bestEntry.code;
           claimed.add(bestEntry.code);
+        }
+      });
+    });
+  })();
+
+  // For checkbox sections (e.g. Q20 = noise sources), link the write-in companion column
+  // to the section name in writeInByParent so inlineOtherBlock() can find it by prefix.
+  // Works by finding the dominant code prefix of resolved (in-CSV) slots, then locating
+  // a write-in column sharing that prefix — handles any client code scheme.
+  (function linkSectionWriteIns() {
+    const checkboxSections = [{ key: 'Q20', sectionName: 'noisesrc' }];
+    checkboxSections.forEach(({ key, sectionName }) => {
+      const slots = Array.isArray(C[key]) ? C[key].filter(c => c && colIdx[c] !== undefined) : [];
+      if (!slots.length) return;
+      const prefixCounts = {};
+      slots.forEach(c => {
+        const pfx = c.split(/[._]/)[0].toLowerCase();
+        prefixCounts[pfx] = (prefixCounts[pfx] || 0) + 1;
+      });
+      const dominantPrefix = Object.keys(prefixCounts).sort((a, b) => prefixCounts[b] - prefixCounts[a])[0];
+      if (!dominantPrefix) return;
+      writeInCols.forEach(w => {
+        if (_inlineShownWriteIns.has(w.code)) return;
+        const wpfx = w.code.split(/[._]/)[0].toLowerCase();
+        if (wpfx === dominantPrefix) {
+          writeInByParent[sectionName] = w;
+          _inlineShownWriteIns.add(w.code);
         }
       });
     });
@@ -1855,8 +1932,8 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
   // that differ across client Key Survey exports (e.g. P25.A1 vs TIME.TIND).
   (function detectPercentageSplitCols() {
     const PCTMAP = [
-      { cKey: 'TIME_I', kw: ['individually', 'individual work'] },
-      { cKey: 'TIME_O', kw: ['with others', 'collaborative'] },
+      { cKey: 'TIME_I', kw: ['working individually', 'work individually'] },
+      { cKey: 'TIME_O', kw: ['working with others', 'work with others', 'collaborative'] },
       { cKey: 'COL_S',  kw: ['scheduled'] },
       { cKey: 'COL_U',  kw: ['unscheduled', 'spontaneous'] },
       { cKey: 'MTG_S',  kw: ['small', '2-5', '2–5'] },
@@ -1889,7 +1966,7 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
       let bestCode = null, bestScore = 0;
       numPctCols.forEach(c => {
         if (claimedPct.has(c)) return;
-        const txt = ((colMetaMap[c] || '') + ' ' + (qTextsMap[c] || '')).toLowerCase();
+        const txt = (colMetaMap[c] ? colMetaMap[c] : (qTextsMap[c] || '')).toLowerCase();
         const score = m.kw.reduce((s, kw) => s + (txt.includes(kw) ? 1 : 0), 0);
         if (score > bestScore) { bestScore = score; bestCode = c; }
       });
