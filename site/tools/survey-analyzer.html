@@ -1474,6 +1474,37 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
   if (!lunLocalFound) C.LUNLOCAL = '';
   if (!techNeedFound) C.TECHNEED = '';
 
+  // Auto-detect FREQOFF and WKSCHED by question text when the default code isn't in this CSV.
+  // Ensures non-standard codes (e.g. P5, Q9) drive the demographic cards and write-in
+  // companions (e.g. Q9.A6) are marked inline-shown by _knownInlineParents below.
+  if (!C.FREQOFF || colIdx[C.FREQOFF] === undefined) {
+    let found = false;
+    codes.forEach((code, i) => {
+      if (found || !code || !code.trim()) return;
+      const qt = (qTexts[i] || '').toLowerCase();
+      if (
+        (qt.includes('how often') && qt.includes('office') && !qt.includes('lunch') && !qt.includes('eat')) ||
+        qt.includes('working at your primary office') ||
+        qt.includes('work at your primary office') ||
+        (qt.includes('days per week') && qt.includes('office') && !qt.includes('lunch'))
+      ) { C.FREQOFF = code.trim(); found = true; }
+    });
+    if (!found) C.FREQOFF = '';
+  }
+  if (!C.WKSCHED || colIdx[C.WKSCHED] === undefined) {
+    let found = false;
+    codes.forEach((code, i) => {
+      if (found || !code || !code.trim()) return;
+      const qt = (qTexts[i] || '').toLowerCase();
+      if (
+        qt.includes('typical weekly schedule') ||
+        qt.includes('weekly work schedule') ||
+        (qt.includes('schedule') && qt.includes('week') && (qt.includes('office') || qt.includes('remote')))
+      ) { C.WKSCHED = code.trim(); found = true; }
+    });
+    if (!found) C.WKSCHED = '';
+  }
+
   // Q26: specialty space verbatim — detect by question text
   let q26Found = !!C.Q26 && C.Q26 !== 'SPECREQ.A1';
   if (!q26Found) {
@@ -1836,6 +1867,7 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
       C[key].forEach(col => { if (col && colIdx[col] !== undefined) claimed.add(col); });
     });
     if (Array.isArray(C.OBEN)) C.OBEN.forEach(col => { if (col) claimed.add(col); });
+    if (Array.isArray(C.Q13)) C.Q13.forEach(col => { if (col) claimed.add(col); });
     ['DEPT','ROLE','GEN','TENURE','FREQOFF','SAT','ENPS','Q42','Q43','Q45','Q26',
      'Q31','Q32','Q34','Q51','Q11','Q12','COMMUTE','Q15','WKSCHED','LUNFREQ',
      'LUNLOCAL','TECHNEED','TIME_I','TIME_O','COL_S','COL_U','MTG_S','MTG_M','MTG_L'].forEach(k => {
@@ -1924,6 +1956,31 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
         }
       });
     });
+
+    // Link OBEN write-in companion when OBEN was auto-detected from the CSV (e.g. Q43.A4).
+    // Works universally: finds dominant code prefix of resolved OBEN slots, links any
+    // write-in sharing that prefix to writeInByParent['opotben'] for inline rendering.
+    if (obenWasAutoDetected) {
+      const obenResolved = C.OBEN.filter(c => c && colIdx[c] !== undefined);
+      if (obenResolved.length) {
+        const pfxCounts = {};
+        obenResolved.forEach(c => {
+          const pfx = c.split(/[._]/)[0].toLowerCase();
+          pfxCounts[pfx] = (pfxCounts[pfx] || 0) + 1;
+        });
+        const dominantPfx = Object.keys(pfxCounts).sort((a, b) => pfxCounts[b] - pfxCounts[a])[0];
+        if (dominantPfx) {
+          writeInCols.forEach(w => {
+            if (_inlineShownWriteIns.has(w.code)) return;
+            const wpfx = w.code.split(/[._]/)[0].toLowerCase();
+            if (wpfx === dominantPfx) {
+              writeInByParent['opotben'] = w;
+              _inlineShownWriteIns.add(w.code);
+            }
+          });
+        }
+      }
+    }
   })();
 
   // Auto-detect percentage-split scalar metrics for non-standard column codes.
@@ -3886,6 +3943,12 @@ function renderWVP() {
   const isFilteredW = filteredRows.length < allRows.length;
   const wvpD = C.WVP.map((col,i) => ({label:qLabel(col, C.WVP_L[i]),...likertDist(rows,col),orgAvg:isFilteredW?likertDist(allRows,col).avg:null}));
   const avgs = wvpD.map(d => d.avg).filter(v => v !== null);
+  // Require at least 25% of WVP slots (min 2) to have data before rendering the section.
+  // Prevents phantom single-column fuzzy matches from generating misleading WVP charts.
+  if (avgs.length < Math.max(2, Math.ceil(C.WVP.length * 0.25))) {
+    document.getElementById('wvpContent').innerHTML = '';
+    return;
+  }
   const comp = avgs.length ? (((avg(avgs)-1)/3)*100).toFixed(0) : '—';
   const sorted = [...wvpD].sort((a,b)=>(b.avg||0)-(a.avg||0));
 
@@ -4065,7 +4128,7 @@ function renderFuture() {
   const lcSum = (...keywords) => locEnts.filter(e => keywords.some(k => e.rawLabel.toLowerCase().includes(k))).reduce((s,e) => s+e.n, 0);
 
   const rb = C.RBEN.map((col,i) => ({label:qLabel(col, C.RBEN_L[i]), p:cbPct(rows,col)})).sort((a,b)=>b.p-a.p);
-  const ob = C.OBEN.map((col,i) => ({label:qLabel(col, C.OBEN_L[i]), p:cbPct(rows,col)})).sort((a,b)=>b.p-a.p);
+  const ob = C.OBEN.map((col,i) => ({label: obenWasAutoDetected ? (colMetaMap[col] || C.OBEN_L[i]) : qLabel(col, C.OBEN_L[i]), p:cbPct(rows,col)})).sort((a,b)=>b.p-a.p);
 
   // ── Top 3 Insights (algorithmic — no API) ─────────────────────────────
   // Summary stats are derived from the rounded tile percentages so they always
@@ -4155,15 +4218,17 @@ function renderFuture() {
       </div>
     </div>` : '';
 
-  html += `<div class="chart-card">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">
-      <div class="chart-card-title" style="margin-bottom:0">Preferred Future Work Location</div>
-      <button class="export-btn" onclick="exportLocationPNG()">↓ Export PNG</button>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(${Math.min(visEnts.length,5)},1fr);gap:0.6rem">${tiles}</div>
-    ${buckets}
-    ${inlineOtherBlock(C.Q45)}
-  </div>`;
+  if (locTotal > 0) {
+    html += `<div class="chart-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">
+        <div class="chart-card-title" style="margin-bottom:0">Preferred Future Work Location</div>
+        <button class="export-btn" onclick="exportLocationPNG()">↓ Export PNG</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(${Math.min(visEnts.length,5)},1fr);gap:0.6rem">${tiles}</div>
+      ${buckets}
+      ${inlineOtherBlock(C.Q45)}
+    </div>`;
+  }
 
   // ── Benefits — side-by-side chip layout ───────────────────────────────
   const benefitChips = (items, color) => items.slice(0,7).map(({label,p}) => `
@@ -4175,20 +4240,25 @@ function renderFuture() {
       </div>
     </div>`).join('');
 
-  html += `<div class="chart-card">
-    <div class="chart-card-title" style="margin-bottom:1.1rem">Work Location Drivers <span>% who selected each reason</span></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.75rem">
-      <div>
+  const hasRben = rb.some(item => item.p > 0);
+  const hasOben = ob.some(item => item.p > 0);
+  if (hasRben || hasOben) {
+    const rbenCol = hasRben ? `<div>
         <div style="font-size:0.68rem;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;color:#DBD99A;margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid rgba(219,217,154,0.2)">🏠 Why work remotely?</div>
         ${benefitChips(rb, '#DBD99A')}
-      </div>
-      <div>
+      </div>` : '';
+    const obenCol = hasOben ? `<div>
         <div style="font-size:0.68rem;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;color:#17E88F;margin-bottom:0.75rem;padding-bottom:0.5rem;border-bottom:1px solid rgba(23,232,143,0.2)">🏢 Why come to the office?</div>
         ${benefitChips(ob, '#17E88F')}
+      </div>` : '';
+    html += `<div class="chart-card">
+      <div class="chart-card-title" style="margin-bottom:1.1rem">Work Location Drivers <span>% who selected each reason</span></div>
+      <div style="display:grid;grid-template-columns:${hasRben && hasOben ? '1fr 1fr' : '1fr'};gap:1.75rem">
+        ${rbenCol}${obenCol}
       </div>
-    </div>
-    ${inlineOtherBlock('RPOTBEN', null, 'Why work remotely?')}${inlineOtherBlock('OPOTBEN', null, 'Why come to the office?')}
-  </div>`;
+      ${hasRben ? inlineOtherBlock('RPOTBEN', null, 'Why work remotely?') : ''}${inlineOtherBlock('OPOTBEN', null, 'Why come to the office?')}
+    </div>`;
+  }
 
   // ── Trade-offs ────────────────────────────────────────────────────────
   const td = C.TRADE.map((col,i) => ({label:qLabel(col, C.TRADE_L[i]),...likertDist(rows,col)}))
