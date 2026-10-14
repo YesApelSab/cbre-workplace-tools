@@ -1989,14 +1989,19 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
   // that differ across client Key Survey exports (e.g. P25.A1 vs TIME.TIND).
   (function detectPercentageSplitCols() {
     const PCTMAP = [
-      { cKey: 'TIME_I', kw: ['working individually', 'work individually'] },
-      { cKey: 'TIME_O', kw: ['working with others', 'work with others', 'collaborative'] },
-      { cKey: 'COL_S',  kw: ['scheduled'] },
-      { cKey: 'COL_U',  kw: ['unscheduled', 'spontaneous'] },
-      { cKey: 'MTG_S',  kw: ['small', '2-5', '2–5'] },
-      { cKey: 'MTG_M',  kw: ['medium', '6-10', '6–10'] },
-      { cKey: 'MTG_L',  kw: ['large', '11'] },
+      { cKey: 'TIME_I', kw: ['working individually', 'work individually'],        def: 'TIME.TIND' },
+      { cKey: 'TIME_O', kw: ['working with others', 'work with others', 'collaborative'], def: 'TIME.TOTHERS' },
+      { cKey: 'COL_S',  kw: ['scheduled'],                                        def: 'COLLAB.SCOLLAB' },
+      { cKey: 'COL_U',  kw: ['unscheduled', 'spontaneous'],                       def: 'COLLAB.UCOLLAB' },
+      { cKey: 'MTG_S',  kw: ['small', '2-5', '2–5'],                             def: 'MTGSIZE.SMALL' },
+      { cKey: 'MTG_M',  kw: ['medium', '6-10', '6–10'],                          def: 'MTGSIZE.MED' },
+      { cKey: 'MTG_L',  kw: ['large', '11'],                                      def: 'MTGSIZE.LARGE' },
     ];
+    // Always reset to hardcoded defaults before the needRemap check.
+    // A prior CSV load in the same session may have set C.TIME_I etc. to a column
+    // code that coincidentally exists in the new CSV (e.g. shared column names across
+    // clients), causing needRemap to be empty and skipping detection entirely.
+    PCTMAP.forEach(m => { C[m.cKey] = m.def; });
     const needRemap = PCTMAP.filter(m => colIdx[C[m.cKey]] === undefined);
     if (!needRemap.length) return;
 
