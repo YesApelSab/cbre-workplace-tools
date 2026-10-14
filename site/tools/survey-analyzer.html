@@ -2023,8 +2023,15 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
       let bestCode = null, bestScore = 0;
       numPctCols.forEach(c => {
         if (claimedPct.has(c)) return;
-        const txt = (colMetaMap[c] ? colMetaMap[c] : (qTextsMap[c] || '')).toLowerCase();
-        const score = m.kw.reduce((s, kw) => s + (txt.includes(kw) ? 1 : 0), 0);
+        const meta = (colMetaMap[c] || '').trim();
+        // "Total" columns are always 100% sum anchors — never a real split metric.
+        if (meta.toLowerCase() === 'total') return;
+        // colMetaMap (sub-question label) is column-specific; qTextsMap (parent text) is
+        // shared across all siblings including Total. Weight colMetaMap matches ×2 so they
+        // always beat fallback matches, preventing the wrong sibling from winning.
+        const hasMeta = !!meta;
+        const txt = (hasMeta ? meta : (qTextsMap[c] || '')).toLowerCase();
+        const score = m.kw.reduce((s, kw) => s + (txt.includes(kw) ? (hasMeta ? 2 : 1) : 0), 0);
         if (score > bestScore) { bestScore = score; bestCode = c; }
       });
       if (bestScore >= 1 && bestCode) {
