@@ -899,6 +899,7 @@ select.client-name-input option { background: #0D2B22; color: var(--text); }
             <option>Government</option>
             <option>Healthcare</option>
             <option>Legal</option>
+            <option>Non Profit</option>
             <option>Professional Services</option>
             <option>Retail</option>
             <option>Tech &amp; Media</option>
@@ -1680,6 +1681,7 @@ function autoDetectDemoColumns(rows, isSingleHeader) {
     'do you have an assigned','which of the following best describes your primary work',
     'recommend','willing to','bring in','eat lu','pass someone',
     'hosting or','overall e','future, where','would you not',
+    'metro line','transit line','subway line',
   ];
   // Value patterns that indicate a scale or binary — not a demographic category
   const SCALE_VALUE_PATTERN = /\b(strongly|agree|disagree|never|always|sometimes|often|rarely|very|extremely|important|likely|unlikely|yes|no)\b/i;
@@ -2460,31 +2462,57 @@ function reopenDiagnostics() {
 }
 
 function checkColumns() {
+  // Core columns expected in every standard survey — missing = possible format problem
+  const CORE = new Set(['SATISFACT.A1', 'ENPS.A1', 'FREQOFF']);
+
   const expected = [];
   for (const [k, v] of Object.entries(C)) {
     if (k.endsWith('_L')) continue;
     if (Array.isArray(v)) v.forEach(col => expected.push(col));
     else expected.push(v);
   }
-  const missing = expected.filter(col => colIdx[col] === undefined);
+  const missing = expected.filter(col => col && colIdx[col] === undefined);
   const el = document.getElementById('columnWarning');
   if (!missing.length) { el.style.display = 'none'; return; }
+
+  const coreMissing     = missing.filter(col => CORE.has(col));
+  const optionalMissing = missing.filter(col => !CORE.has(col));
   const allCols = Object.keys(colIdx).filter(c => c).sort();
+
+  let parts = '';
+  if (coreMissing.length) {
+    parts += `<div style="background:rgba(210,120,90,0.12);border:1px solid rgba(210,120,90,0.35);border-radius:6px;padding:0.6rem 0.9rem;font-size:0.8rem;color:var(--text);display:flex;align-items:flex-start;gap:0.75rem">
+      <span style="color:#D2785A;font-size:1rem;line-height:1.4">⚠</span>
+      <div style="flex:1">
+        <strong style="color:#D2785A">${coreMissing.length} core column${coreMissing.length>1?'s':''} not found</strong> — this CSV may not be in the expected format.
+        <details style="margin-top:0.3rem">
+          <summary style="cursor:pointer;color:var(--text-muted);font-size:0.75rem">Show missing (${coreMissing.length})</summary>
+          <code style="display:block;margin-top:0.3rem;font-size:0.72rem;color:var(--text-muted);word-break:break-all">${coreMissing.join(', ')}</code>
+        </details>
+        <details style="margin-top:0.25rem">
+          <summary style="cursor:pointer;color:var(--text-muted);font-size:0.75rem">Show CSV columns (${allCols.length} total — use to diagnose naming mismatch)</summary>
+          <code style="display:block;margin-top:0.3rem;font-size:0.72rem;color:var(--text-muted);word-break:break-all">${allCols.join(', ')}</code>
+        </details>
+      </div>
+    </div>`;
+  }
+  if (optionalMissing.length) {
+    parts += `<div style="background:rgba(80,160,220,0.08);border:1px solid rgba(80,160,220,0.3);border-radius:6px;padding:0.6rem 0.9rem;font-size:0.8rem;color:var(--text);display:flex;align-items:flex-start;gap:0.75rem${coreMissing.length?';margin-top:0.4rem':''}">
+      <span style="color:#50A0DC;font-size:1rem;line-height:1.4">ℹ</span>
+      <div style="flex:1">
+        <strong style="color:#50A0DC">${optionalMissing.length} question${optionalMissing.length>1?'s were':' was'} omitted from this survey</strong> — those sections will be skipped.
+        <details style="margin-top:0.3rem">
+          <summary style="cursor:pointer;color:var(--text-muted);font-size:0.75rem">Show omitted (${optionalMissing.length})</summary>
+          <code style="display:block;margin-top:0.3rem;font-size:0.72rem;color:var(--text-muted);word-break:break-all">${optionalMissing.join(', ')}</code>
+        </details>
+      </div>
+    </div>`;
+  }
+
   el.style.display = '';
-  el.innerHTML = `<div style="background:rgba(210,120,90,0.12);border:1px solid rgba(210,120,90,0.35);border-radius:6px;padding:0.6rem 0.9rem;font-size:0.8rem;color:var(--text);display:flex;align-items:flex-start;gap:0.75rem">
-    <span style="color:#D2785A;font-size:1rem;line-height:1.4">⚠</span>
-    <div style="flex:1">
-      <strong style="color:#D2785A">${missing.length} expected column${missing.length>1?'s':''} not found in this CSV</strong> — sections using these columns will show no data.
-      <details style="margin-top:0.3rem">
-        <summary style="cursor:pointer;color:var(--text-muted);font-size:0.75rem">Show missing (${missing.length})</summary>
-        <code style="display:block;margin-top:0.3rem;font-size:0.72rem;color:var(--text-muted);word-break:break-all">${missing.join(', ')}</code>
-      </details>
-      <details style="margin-top:0.25rem">
-        <summary style="cursor:pointer;color:var(--text-muted);font-size:0.75rem">Show CSV columns (${allCols.length} total — use to diagnose naming mismatch)</summary>
-        <code style="display:block;margin-top:0.3rem;font-size:0.72rem;color:var(--text-muted);word-break:break-all">${allCols.join(', ')}</code>
-      </details>
-    </div>
-    <button onclick="document.getElementById('columnWarning').style.display='none'" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.1rem;padding:0;line-height:1">×</button>
+  el.innerHTML = `<div style="position:relative">
+    ${parts}
+    <button onclick="document.getElementById('columnWarning').style.display='none'" style="position:absolute;top:0.4rem;right:0.4rem;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.1rem;padding:0;line-height:1">×</button>
   </div>`;
 }
 
@@ -3436,7 +3464,7 @@ function renderDemo() {
     { col:C.DEPT,    label:qLabel(C.DEPT,    'Department'),                    order:null },
     { col:C.ROLE,    label:qLabel(C.ROLE,    'Role'),                          order:['Leader of Leaders','Leader of Individual Contributors','Individual Contributor'] },
     { col:C.GEN,     label:qLabel(C.GEN,     'Generation'),                    order:['Born before 1965','Born 1965-1980','Born 1981-1996','Born 1997 or after'] },
-    { col:C.TENURE,  label:qLabel(C.TENURE,  'Tenure'),                        order:['10+ years','6-10 years','3-5 years','1-2 years','Less than 1 year'] },
+    { col:C.TENURE,  label:qLabel(C.TENURE,  'Tenure'),                        order:['Less than 1 year','1-2 years','3-5 years','6-10 years','10-15 years','10+ years','15+ years'] },
     { col:C.FREQOFF, label:qLabel(C.FREQOFF, 'Office Frequency'),              order:['Every day (5 days per week)','4 days per week','2-3 days per week','1 day per week','Less than one day per week','Never (fully remote)'] },
     { col:C.WKSCHED, label:qLabel(C.WKSCHED, 'Weekly Schedule Type'),         order:null },
     { col:C.TLOCAL,  label:qLabel(C.TLOCAL,  'Same Office as Majority of Team'), order:['Yes','No'] },
@@ -3446,7 +3474,7 @@ function renderDemo() {
     { col:C.COMMUTE, label:qLabel(C.COMMUTE, 'One-Way Commute Time'),          order:['0-15 minutes','15-30 minutes','30-45 minutes','45-60 minutes','60+ minutes'] },
     { col:C.Q15,     label:qLabel(C.Q15,     'Primary Commute Mode'),          order:null },
   ];
-  const PAL = ['#17E88F','#0FB870','#80BBAD','#538184','#003F2D','#DBD99A','#D2785A','#CAD1D3','#012A2D'];
+  const PAL = ['#17E88F','#0FB870','#80BBAD','#538184','#2D7A5A','#DBD99A','#D2785A','#CAD1D3','#1E5C60'];
 
   let html = '';
   COLS.forEach(({ col, label, order }) => {
@@ -5754,13 +5782,13 @@ body{font-family:'DM Sans',Arial,sans-serif;background:#fff;color:#1A2E24;font-s
       {col:C.DEPT,    label:'Department'},
       {col:C.ROLE,    label:'Role',           order:['Leader of Leaders','Leader of Individual Contributors','Individual Contributor']},
       {col:C.GEN,     label:'Generation',     order:['Born before 1965','Born 1965-1980','Born 1981-1996','Born 1997 or after']},
-      {col:C.TENURE,  label:'Tenure',         order:['10+ years','6-10 years','3-5 years','1-2 years','Less than 1 year']},
+      {col:C.TENURE,  label:'Tenure',         order:['Less than 1 year','1-2 years','3-5 years','6-10 years','10-15 years','10+ years','15+ years']},
       {col:C.FREQOFF, label:'Office Frequency',order:['Every day (5 days per week)','4 days per week','2-3 days per week','1 day per week','Less than one day per week','Never (fully remote)']},
       {col:C.WKSCHED, label:'Weekly Schedule Type'},
       {col:C.Q11,     label:'Has Assigned Workspace', order:['Yes','No']},
       {col:C.COMMUTE, label:'One-Way Commute',order:['0-15 minutes','15-30 minutes','30-45 minutes','45-60 minutes','60+ minutes']},
     ];
-    const dPAL = ['#003F2D','#17E88F','#80BBAD','#538184','#DBD99A','#D2785A','#CAD1D3','#8B1A1A'];
+    const dPAL = ['#2D7A5A','#17E88F','#80BBAD','#538184','#DBD99A','#D2785A','#CAD1D3','#8B1A1A'];
     let dHtml = '';
     dCols.forEach(({col, label, order}) => {
       const counts = countBy(rows, col);
